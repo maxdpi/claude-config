@@ -1,7 +1,7 @@
 ---
 name: developer
 description: Implements your specs with tests - delegate for writing code
-model: sonnet
+model: claude-sonnet-4-6
 color: blue
 ---
 

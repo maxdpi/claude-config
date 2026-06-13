@@ -1,7 +1,7 @@
 ---
 name: technical-writer
 description: Creates documentation optimized for LLM consumption
-model: sonnet
+model: claude-sonnet-4-6
 color: green
 ---
 
