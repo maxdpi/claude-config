@@ -171,8 +171,8 @@ ls "${SESSION_DIR}/subagents/"
 # Get subagent task description (first user message)
 jq -c 'select(.type=="user") | .message.content' agent-*.jsonl | head -1
 
-# Find Task tool calls in parent (these spawn subagents)
-jq -c 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and .name=="Task") | .input' file.jsonl
+# Find sub-agent spawn calls in parent (Agent tool; older transcripts named it Task)
+jq -c 'select(.type=="assistant") | .message.content[]? | select(.type=="tool_use" and (.name=="Agent" or .name=="Task")) | .input' file.jsonl
 ```
 
 ## Conversation Branching
@@ -265,8 +265,8 @@ extract_branch "$TARGET" "$FILE" | jq 'select(.type=="user") | .message.content'
 
 ## Correlation
 
-Subagent files (`agent-{hash}.jsonl`) don't link directly to parent Task calls. To correlate:
+Subagent files (`agent-{hash}.jsonl`) don't link directly to parent Agent/Task spawn calls. To correlate:
 
 1. List all subagent files under `{session}/subagents/`
 2. Read first user message of each for task description
-3. Match description to Task tool_use blocks in parent conversation
+3. Match description to Agent (formerly Task) tool_use blocks in parent conversation
