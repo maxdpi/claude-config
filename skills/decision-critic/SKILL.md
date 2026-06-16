@@ -14,6 +14,8 @@ challenge work to two adversarial workers in parallel, then synthesize a verdict
 The two adversarial workers (`verifier`, `challenger`) run in parallel. Pick the
 dispatch mechanism by environment:
 
+> **Check first (do this — do not assume):** run `printenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If it prints `1`, Agent Teams is ON → spawn **teammates**. If it is empty/unset → spawn **Agent-tool subagents**. The setting lives in `~/.claude/settings.json` `env`; the model cannot see it without checking.
+
 - **Agent Teams enabled** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): spawn them as
   **teammates** — "Spawn a teammate using the `quality-reviewer` agent type as
   *verifier* …" and "Spawn a teammate using the `developer` agent type as

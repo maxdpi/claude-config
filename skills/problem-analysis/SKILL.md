@@ -19,6 +19,8 @@ is identified with supporting evidence. Solution discovery is downstream.
 The investigator workers (step 3 iterative investigation) challenge the hypothesis
 space independently. Pick the dispatch mechanism by environment:
 
+> **Check first (do this — do not assume):** run `printenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If it prints `1`, Agent Teams is ON → spawn **teammates**. If it is empty/unset → spawn **Agent-tool subagents**. The setting lives in `~/.claude/settings.json` `env`; the model cannot see it without checking.
+
 - **Agent Teams enabled** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): spawn
   **N investigator teammates** in parallel — "Spawn a teammate using the `developer`
   agent type as *investigator-H1* …" (one per top-ranked hypothesis). This is the
