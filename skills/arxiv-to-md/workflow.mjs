@@ -37,7 +37,6 @@ export const meta = {
   },
 };
 
-export async function run() {
   // ── Phase 1: Discover ─────────────────────────────────────────────────────
   phase("discover");
 
@@ -247,4 +246,3 @@ Failed:
       summary: finalizeResult,
     },
   };
-}

@@ -97,7 +97,6 @@ CONTEXT ACCUMULATION: Your --thoughts MUST include:
   | Original | Revised |
 `;
 
-export async function run() {
   // ── Phase 1: Content Classification (UNDERSTANDING) ───────────────────────
   phase("content_classification");
 
@@ -489,4 +488,3 @@ Output the FINAL STYLED CONTENT — the complete, publication-ready version.`,
   );
 
   return { styled_content };
-}

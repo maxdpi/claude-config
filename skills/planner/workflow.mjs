@@ -356,7 +356,6 @@ function isQrPass(qrResult) {
 // Main workflow
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function run() {
   // ── Phase 1: plan-init ─────────────────────────────────────────────────────
   phase("plan-init");
   log("PLANNER: Starting plan-init (context capture)");
@@ -609,4 +608,3 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
   log(`PLANNER: plan artifact built — ${plan.milestones.length} milestones, ${plan.waves.length} waves`);
 
   return { plan };
-}

@@ -89,7 +89,6 @@ VERIFICATION SUMMARY:
 CRITICAL: STOP. Do NOT proceed to Execute step.
 Wait for explicit user approval before continuing.`;
 
-export async function run() {
   // ── Phase 1: Triage ───────────────────────────────────────────────────────
   phase("triage");
 
@@ -343,4 +342,3 @@ Output the final optimized prompt text and a summary of changes applied.`,
   );
 
   return { optimized_prompt };
-}

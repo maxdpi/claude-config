@@ -40,7 +40,6 @@ export const meta = {
 
 const MAX_DEEPEN_ITERATIONS = 4;
 
-export async function run() {
   // ── Phase 1: SCOPE ──────────────────────────────────────────────────────
   phase("Scope");
 
@@ -225,4 +224,3 @@ Ensure:
   );
 
   return { synthesis };
-}

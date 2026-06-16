@@ -50,8 +50,7 @@ export const meta = {
 
 const DEFAULT_CATEGORY_COUNT = 10;
 
-export async function run() {
-  const n = args.n ?? DEFAULT_CATEGORY_COUNT;
+  const n = args?.n ?? DEFAULT_CATEGORY_COUNT;
 
   // ── Phase 1: Mode Selection ───────────────────────────────────────────────
   phase("mode_selection");
@@ -342,4 +341,3 @@ Present ALL work items. The output drives the developer's refactoring plan.`,
 
   const work_items = synthesizeResult;
   return { work_items };
-}

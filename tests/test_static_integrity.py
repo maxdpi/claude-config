@@ -115,28 +115,42 @@ class TestNativeRuntimeReference:
 # Test 3: Every skills/*/workflow.mjs is syntactically valid
 # ===========================================================================
 class TestWorkflowMjsSyntax:
-    """node --check each workflow.mjs; assert meta/run structure."""
+    """Validate each workflow.mjs in the WORKFLOW-TOOL DIALECT.
+
+    A workflow.mjs is NOT a plain ES module: it is `export const meta = {...}`
+    followed by a BARE body (top-level await/return, injected globals like
+    phase()/agent()). Raw `node --check` is the WRONG validator here -- top-level
+    `return` (the artifact) is illegal in a module, so node --check would reject
+    the correct form. We validate the body by wrapping it in an async function.
+
+    REGRESSION GUARD (S2, 2026-06-16): the ports were originally written with an
+    `export async function run() {...}` wrapper to satisfy a naive `node --check`
+    -- but the Workflow tool rejects any `export` beyond meta ("Unexpected keyword
+    'export'") and the skills failed to launch. test_no_export_after_meta below
+    pins the bare-body form so the wrapper can never come back.
+    """
 
     _node = shutil.which("node")
 
     @staticmethod
-    def _mjs_files() -> list[Path]:
-        return sorted(SKILLS.glob("*/workflow.mjs"))
+    def _wrap_for_check(text: str) -> str:
+        # Drop the single `export` on meta, wrap the rest in an async function so
+        # the top-level `return` (the artifact) becomes valid for a syntax check.
+        return "async function __wf(){\n" + text.replace("export const meta", "const meta", 1) + "\n}\n"
 
     @pytest.mark.parametrize(
         "mjs",
         [pytest.param(p, id=p.parent.name) for p in sorted(SKILLS.glob("*/workflow.mjs"))],
     )
-    def test_node_check(self, mjs: Path) -> None:
+    def test_body_valid_in_workflow_context(self, mjs: Path, tmp_path: Path) -> None:
         if self._node is None:
             pytest.skip("node not found on PATH — install Node.js to enable MJS syntax checks")
-        result = subprocess.run(
-            [self._node, "--check", str(mjs)],
-            capture_output=True,
-            text=True,
-        )
+        probe = tmp_path / "probe.mjs"
+        probe.write_text(self._wrap_for_check(mjs.read_text(encoding="utf-8")), encoding="utf-8")
+        result = subprocess.run([self._node, "--check", str(probe)], capture_output=True, text=True)
         assert result.returncode == 0, (
-            f"node --check failed for {mjs.relative_to(REPO)}:\n{result.stderr}"
+            f"workflow.mjs body is not valid JS in the Workflow async context for "
+            f"{mjs.relative_to(REPO)}:\n{result.stderr}"
         )
 
     @pytest.mark.parametrize(
@@ -153,12 +167,32 @@ class TestWorkflowMjsSyntax:
         "mjs",
         [pytest.param(p, id=p.parent.name) for p in sorted(SKILLS.glob("*/workflow.mjs"))],
     )
-    def test_phases_or_run_body_present(self, mjs: Path) -> None:
+    def test_no_export_after_meta(self, mjs: Path) -> None:
+        """The Workflow tool rejects any `export` beyond `export const meta` --
+        the body must be bare, NEVER wrapped in `export function run()` (S2 bug)."""
         text = mjs.read_text(encoding="utf-8")
-        has_phases = "phases" in text
-        has_run = re.search(r"\bexport\s+(async\s+)?function\s+run\b", text) is not None
-        assert has_phases or has_run, (
-            f"{mjs.relative_to(REPO)} must contain a 'phases' array or 'export function run'"
+        rest = text.replace("export const meta", "", 1)  # drop the one allowed export
+        stray = re.search(r"\bexport\b", rest)
+        assert stray is None, (
+            f"{mjs.relative_to(REPO)}: found a second 'export' (e.g. a run() wrapper). "
+            "The Workflow tool requires a BARE body after 'export const meta' "
+            "(top-level await/return), not 'export function run()'."
+        )
+        # And no run() wrapper of any kind.
+        assert re.search(r"\bfunction\s+run\b", text) is None, (
+            f"{mjs.relative_to(REPO)}: contains a 'function run' wrapper -- the body "
+            "must be top-level (bare) for the Workflow tool."
+        )
+
+    @pytest.mark.parametrize(
+        "mjs",
+        [pytest.param(p, id=p.parent.name) for p in sorted(SKILLS.glob("*/workflow.mjs"))],
+    )
+    def test_bare_body_uses_injected_globals(self, mjs: Path) -> None:
+        text = mjs.read_text(encoding="utf-8")
+        assert "phases" in text and re.search(r"\bphase\(", text) and re.search(r"\bagent\(", text), (
+            f"{mjs.relative_to(REPO)} must declare meta.phases and call phase()/agent() "
+            "in its bare body"
         )
 
     def test_check_mjs_syntax_script_passes(self) -> None:

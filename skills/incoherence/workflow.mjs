@@ -112,7 +112,6 @@ SELECTION RULES:
 - L, M are critical for design-phase docs and specs-to-be-implemented
 `;
 
-export async function run() {
   // ── Phase 1: Survey ───────────────────────────────────────────────────────
   phase("survey");
 
@@ -475,4 +474,3 @@ Output inline report (no file):
   );
 
   return { verdicts: confirmedVerdicts };
-}
