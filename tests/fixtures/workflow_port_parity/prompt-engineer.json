@@ -1,0 +1,13 @@
+{
+  "_note": "Structural parity fixture for prompt-engineer. Both 'python' and 'port' blobs encode the output contract (required key: 'optimized_prompt'). A fully live-captured pair requires running both runtimes against the same input. This fixture encodes the CONTRACT — same structure, equivalent content shape — for the M-008b deletion gate (R-004).",
+  "_skill": "prompt-engineer",
+  "_required_key": "optimized_prompt",
+  "_milestone": "M-006",
+  "_fixture_fidelity": "hand-authored-contract",
+  "python": {
+    "optimized_prompt": "You are a code review agent.\n\nReview the provided diff for:\n1. Correctness bugs\n2. Reuse/simplification opportunities\n3. Efficiency improvements\n\n<output_format>\nFor each finding:\n- FINDING: [type]\n- LOCATION: [file:line]\n- DESCRIPTION: [what and why]\n- SUGGESTION: [concrete fix]\n</output_format>\n\nBias toward high-confidence findings. Skip uncertain observations."
+  },
+  "port": {
+    "optimized_prompt": "You are a code review agent.\n\nReview the provided diff for:\n1. Correctness bugs\n2. Reuse/simplification opportunities\n3. Efficiency improvements\n\n<output_format>\nFor each finding:\n- FINDING: [type]\n- LOCATION: [file:line]\n- DESCRIPTION: [what and why]\n- SUGGESTION: [concrete fix]\n</output_format>\n\nBias toward high-confidence findings. Skip uncertain observations."
+  }
+}

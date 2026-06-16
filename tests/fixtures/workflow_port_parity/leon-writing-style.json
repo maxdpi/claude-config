@@ -1,0 +1,13 @@
+{
+  "_note": "Structural parity fixture for leon-writing-style. Both 'python' and 'port' blobs encode the output contract (required key: 'styled_content'). A fully live-captured pair requires running both runtimes against the same input. This fixture encodes the CONTRACT — same structure, equivalent content shape — for the M-008b deletion gate (R-004).",
+  "_skill": "leon-writing-style",
+  "_required_key": "styled_content",
+  "_milestone": "M-006",
+  "_fixture_fidelity": "hand-authored-contract",
+  "python": {
+    "styled_content": "I've been building distributed systems for fifteen years, and I still see the same mistake: engineers reach for consistency when they need availability.\n\nHere's the problem. Most systems don't actually need strong consistency. They need to appear consistent to users while remaining available under network partition. These are different requirements, and conflating them produces systems that fail in production.\n\nConsider a shopping cart. When a user adds an item, what matters? That the item appears in their cart immediately. Not that every datacenter has synchronized. The synchronization can happen asynchronously, and the user will never notice.\n\nI'd recommend starting with eventual consistency and adding stronger guarantees only where you can measure user impact. This is the correct approach."
+  },
+  "port": {
+    "styled_content": "I've been building distributed systems for fifteen years, and I still see the same mistake: engineers reach for consistency when they need availability.\n\nHere's the problem. Most systems don't actually need strong consistency. They need to appear consistent to users while remaining available under network partition. These are different requirements, and conflating them produces systems that fail in production.\n\nConsider a shopping cart. When a user adds an item, what matters? That the item appears in their cart immediately. Not that every datacenter has synchronized. The synchronization can happen asynchronously, and the user will never notice.\n\nI'd recommend starting with eventual consistency and adding stronger guarantees only where you can measure user impact. This is the correct approach."
+  }
+}

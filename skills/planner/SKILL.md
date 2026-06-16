@@ -5,10 +5,11 @@ description: Interactive planning and execution for complex tasks. IMMEDIATELY i
 
 ## Activation
 
-When this skill activates, IMMEDIATELY invoke the corresponding script. The
-script IS the workflow.
+When this skill activates, IMMEDIATELY invoke the Workflow tool. The workflow IS the entry point.
 
-| Mode      | Intent                             | Command                                                                                                          |
-| --------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| planning  | "plan", "design", "architect"      | `<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.planner.orchestrator.planner --step 1" />`  |
-| execution | "execute", "implement", "run plan" | `<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.planner.orchestrator.executor --step 1" />` |
+| Mode      | Intent                             | Workflow script                              |
+| --------- | ---------------------------------- | -------------------------------------------- |
+| planning  | "plan", "design", "architect"      | `skills/planner/workflow.mjs` with `mode: plan`    |
+| execution | "execute", "implement", "run plan" | `skills/planner/workflow.mjs` with `mode: execute` |
+
+Invoke the Workflow tool with the script at `skills/planner/workflow.mjs`. Pass the user's request and the resolved mode as `args`.

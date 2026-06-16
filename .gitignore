@@ -14,11 +14,16 @@
 !skills/**
 !output-styles/
 !output-styles/**
+!docs/
+!docs/**
+!tests/
+!tests/**
 
 # Track root files
 !README.md
 !LICENSE
 !.gitignore
+!settings.json
 
 # Always ignore these, even in tracked directories
 .DS_Store

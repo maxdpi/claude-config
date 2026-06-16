@@ -83,11 +83,11 @@ Capture group 1 extracts the skill name. No need to maintain a list of valid ski
 
 ### Subagent Correlation Challenge
 
-Subagent files are named `agent-{hash}.jsonl` but the hash is not stored in the parent conversation's Task tool call. Correlation requires:
+Subagent files are named `agent-{hash}.jsonl` but the hash is not stored in the parent conversation's Agent (formerly Task) tool call. Correlation requires:
 
 1. List all subagent files for the session
 2. Read each subagent's first user message (contains task description)
-3. Match description text to Task tool_use inputs in parent
+3. Match description text to Agent/Task tool_use inputs in parent
 
 This is mildly inconvenient but not worth building tooling for -- it's a rare operation.
 
