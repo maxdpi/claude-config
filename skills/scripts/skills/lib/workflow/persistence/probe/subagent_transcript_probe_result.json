@@ -1,0 +1,64 @@
+{
+  "probe": "subagent_transcript",
+  "assumption": "A4",
+  "captured_at": "2026-06-16T18:59:00Z",
+  "captured_in_session": "6bc18a41-f3f2-41d9-b403-9d8da5aaad51",
+  "project_dir_key": "-Users-ethnet",
+  "self_bootstrap": {
+    "method": "spawned a minimal subagent via the Agent tool, captured its agentId from the tool result, then located its transcript by that id",
+    "spawn_returned_agent_id": "ab73a631269d58310",
+    "note": "the probe subagent declined the introspection task (overcautious refusal), but the Agent tool result still surfaced its agentId, which is all the bootstrap needs"
+  },
+  "transcript_path": {
+    "pattern": "~/.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl",
+    "resolved": "~/.claude/projects/-Users-ethnet/6bc18a41-f3f2-41d9-b403-9d8da5aaad51/subagents/agent-ab73a631269d58310.jsonl",
+    "confirmed": true
+  },
+  "join_validation": {
+    "claim": "agentId extracted from the filename == agentId carried in the transcript records == agentId from the spawn result (the join M-001/DL-016/DL-020 rely on)",
+    "filename_agent_id": "ab73a631269d58310",
+    "in_record_agent_ids": ["ab73a631269d58310"],
+    "spawn_result_agent_id": "ab73a631269d58310",
+    "match": true,
+    "in_record_session_id": "6bc18a41-f3f2-41d9-b403-9d8da5aaad51",
+    "session_id_matches_path": true
+  },
+  "transcript_format": {
+    "encoding": "JSONL (one JSON object per line)",
+    "record_keys": [
+      "parentUuid", "isSidechain", "promptId", "agentId", "type", "message",
+      "uuid", "timestamp", "sessionKind", "userType", "entrypoint", "cwd",
+      "sessionId", "version", "gitBranch"
+    ],
+    "record_types_observed": ["user", "assistant", "attachment"],
+    "isSidechain": true,
+    "note": "every record carries both agentId and sessionId, so the path<->payload join can be reconstructed from any single line"
+  },
+  "cleanup_period_days": {
+    "value": 30,
+    "source": "Claude Code settings `cleanupPeriodDays` default; not set in ~/.claude/settings.json or settings.local.json in this environment, so the 30-day default applies",
+    "governs_subagent_transcripts": "assumed (medium confidence) -- the setting governs ~/.claude/projects transcript retention; subagent transcripts live under that tree so are presumed covered",
+    "confidence": "medium"
+  },
+  "send_message": {
+    "available": true,
+    "evidence": "the Agent tool result explicitly offered: \"use SendMessage with to: 'ab73a631269d58310' to continue this agent\"",
+    "agent_teams_env_gate": "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is UNSET in this environment; SendMessage to continue a spawned subagent is nonetheless available. The env gate governs the teammate/team path, not subagent continuation.",
+    "min_cli_version_note": "SendMessage and the workflow/teams features track recent Claude Code CLI builds; pin a min-CLI-version when the substrate hard-depends on it. Not separately measured here.",
+    "confidence": "high (subagent continuation), medium (teammate path, feature disabled here)"
+  },
+  "permission_mode": {
+    "values": ["plan", "default", "acceptEdits", "bypassPermissions", "auto"],
+    "plan_spawn_empirically_confirmed": false,
+    "plan_spawn_note": "the Agent tool and Workflow agent() opts do not expose permissionMode directly; permissionMode lives on subagent .md frontmatter (DL-017/DL-023), so a direct plan-mode spawn was not exercised in this probe. Tagged medium confidence.",
+    "parent_precedence": {
+      "claim_DL_021": "a parent session running bypassPermissions/acceptEdits/auto overrides a child's permissionMode",
+      "this_environment_parent_mode": "auto",
+      "evidence": "~/.claude/settings.json sets permissions.defaultMode = \"auto\"",
+      "implication": "in THIS user's configuration the parent mode is `auto`, one of the overriding modes -> classify_phases must default-deny (auto_replay nothing) and /resume must warn that permissionMode enforcement is overridden (DL-021/R-007). This is a live, not hypothetical, condition here.",
+      "confidence": "high"
+    }
+  },
+  "session_scoped_resume_restatement": "Native subagent transcripts are session-scoped: they live under {sessionId}/ and are read by resumeFromRunId only within the same session. Cross-session, workflow-level resume is NOT provided by the native runtime and still requires the durable substrate (DL-001).",
+  "fallback_when_path_not_found": "Per DL-020: if the native transcript path cannot be resolved from the run's stored session_id + native_agent_id, is_resumable() returns False (assume cleaned) rather than falling back to a started_at proxy."
+}
