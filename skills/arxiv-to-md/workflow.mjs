@@ -171,7 +171,7 @@ ${
         {
           label: `convert-${paper.arxiv_id}`,
           phase: "convert",
-          agentType: "converter",
+          agentType: "developer",
           isolation: "worktree",
         },
       );

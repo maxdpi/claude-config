@@ -195,6 +195,33 @@ class TestWorkflowMjsSyntax:
             "in its bare body"
         )
 
+    # Built-in agent types the Workflow tool resolves WITHOUT a project agent def.
+    # (Repo agents/*.md basenames are added dynamically below.)
+    _BUILTIN_AGENT_TYPES = frozenset({
+        "Explore", "Plan", "claude", "general-purpose",
+        "claude-code-guide", "statusline-setup",
+    })
+
+    @pytest.mark.parametrize(
+        "mjs",
+        [pytest.param(p, id=p.parent.name) for p in sorted(SKILLS.glob("*/workflow.mjs"))],
+    )
+    def test_agent_types_are_resolvable(self, mjs: Path) -> None:
+        """REGRESSION GUARD (S2, 2026-06-16): the Workflow tool resolves `agentType`
+        against the GLOBAL agent registry (repo agents/*.md + built-ins), NOT a
+        skill-local skills/<name>/agents/<type>.md. A skill-local agentType fails
+        at runtime with "agent type 'X' not found". Every agentType used must
+        resolve to a registered agent."""
+        registered = {p.stem for p in (REPO / "agents").glob("*.md")} | self._BUILTIN_AGENT_TYPES
+        used = set(re.findall(r"""agentType:\s*['"]([^'"]+)['"]""", mjs.read_text(encoding="utf-8")))
+        unresolvable = used - registered
+        assert not unresolvable, (
+            f"{mjs.relative_to(REPO)} uses agentType(s) {sorted(unresolvable)} that are "
+            f"NOT registered. Known: {sorted(registered)}. The Workflow tool does not "
+            f"resolve skill-local agents/<type>.md — use a registered agent (e.g. 'Explore' "
+            f"for read-only exploration, 'developer' for writes)."
+        )
+
     def test_check_mjs_syntax_script_passes(self) -> None:
         """The standalone check_mjs_syntax.sh script must exit 0 when node is present."""
         script = REPO / "tests" / "tools" / "check_mjs_syntax.sh"

@@ -175,7 +175,7 @@ Output structured findings:
         {
           label: `explore-${cat.id}`,
           phase: "dispatch",
-          agentType: "explorer",
+          agentType: "Explore",
           model: "haiku",
         },
       )
