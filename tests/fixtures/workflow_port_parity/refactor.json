@@ -1,0 +1,12 @@
+{
+  "_note": "Structural parity fixture for refactor. Both 'python' and 'port' blobs encode the output contract (required key: 'work_items'). A fully live-captured pair requires running both runtimes against the same input. This fixture encodes the CONTRACT — same structure, equivalent content shape — for the M-008b deletion gate (R-004).",
+  "_skill": "refactor",
+  "_required_key": "work_items",
+  "_milestone": "M-006",
+  "python": {
+    "work_items": "## Refactoring Work Items\n\n### [HIGH] Missing Error Handling — High Severity\n\n**Problem**: Functions that call external APIs do not handle failure cases, leading to unhandled exceptions propagating to users.\n\n**Location(s)**:\n- skills/scripts/skills/lib/workflow/persistence/eventlog.py:45 — append_event() does not catch OS errors\n- skills/scripts/skills/arxiv_to_md/sub_agent.py:112 — HTTP fetch without timeout/error handling\n\n**Root Cause**: Defensive programming not enforced as a project convention.\n\n**Fix Strategy**:\n1. Add try/except blocks around OS and network calls\n2. Log errors with context before re-raising or returning error values\n3. Add timeout parameters to network requests\n\n**Effort**: medium\n**Impact**: Prevents silent failures and improves debuggability"
+  },
+  "port": {
+    "work_items": "## Refactoring Work Items\n\n### [HIGH] Missing Error Handling — High Severity\n\n**Problem**: Functions that call external APIs do not handle failure cases, leading to unhandled exceptions propagating to users.\n\n**Location(s)**:\n- skills/scripts/skills/lib/workflow/persistence/eventlog.py:45 — append_event() does not catch OS errors\n- skills/scripts/skills/arxiv_to_md/sub_agent.py:112 — HTTP fetch without timeout/error handling\n\n**Root Cause**: Defensive programming not enforced as a project convention.\n\n**Fix Strategy**:\n1. Add try/except blocks around OS and network calls\n2. Log errors with context before re-raising or returning error values\n3. Add timeout parameters to network requests\n\n**Effort**: medium\n**Impact**: Prevents silent failures and improves debuggability"
+  }
+}

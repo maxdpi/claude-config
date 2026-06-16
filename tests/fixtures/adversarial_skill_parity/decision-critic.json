@@ -1,0 +1,74 @@
+{
+  "_note": "Structural parity fixture for the decision-critic adversarial skill (M-007, CI-M-007-005, DL-008). Both 'python' and 'port' blobs encode the same structured critique artifact for the fixed input: 'Switch the primary database from PostgreSQL to MongoDB to improve schema flexibility'. A fully live-captured pair requires running both runtimes (the Python decision_critic.py CLI for steps 1-7 and the Agent Teams port or Workflow+subagent fallback) against the same input and recording each structured output. This fixture encodes the CONTRACT — same claim IDs, same verdict enum, equivalent structured content — to gate M-008b Python deletion (R-004, DL-008). The blobs below are hand-authored to the same spec and represent a canonical structurally-representative sample. FIXTURE FIDELITY: structural — both blobs are hand-authored to the same spec; a live-captured pair requires executing both runtimes against identical input.",
+  "_skill": "decision-critic",
+  "_required_keys": ["claim_ids", "verdict"],
+  "_milestone": "M-007",
+  "_fixture_fidelity": "structural — both blobs are hand-authored to the same spec; a live-captured pair requires executing both runtimes against identical input",
+  "_input": "Decision under review: Switch the primary database from PostgreSQL to MongoDB to improve schema flexibility.",
+  "python": {
+    "claim_ids": ["C1", "C2", "C3", "C4"],
+    "assumption_ids": ["A1", "A2", "A3"],
+    "constraint_ids": ["K1", "K2"],
+    "judgment_ids": ["J1"],
+    "claims": {
+      "C1": "MongoDB provides greater schema flexibility than PostgreSQL.",
+      "C2": "The current schema rigidity is causing demonstrable development friction.",
+      "C3": "Migrating an existing PostgreSQL database to MongoDB is operationally feasible within the current team's capacity.",
+      "C4": "MongoDB's performance characteristics are acceptable for the existing query workload."
+    },
+    "verifiability": {
+      "C1": "V",
+      "C2": "V",
+      "C3": "V",
+      "C4": "V",
+      "A1": "J",
+      "A2": "V",
+      "A3": "J",
+      "K1": "C",
+      "K2": "C",
+      "J1": "J"
+    },
+    "verification_results": {
+      "C1": "VERIFIED",
+      "C2": "UNCERTAIN",
+      "C3": "FAILED",
+      "C4": "UNCERTAIN"
+    },
+    "verdict": "REVISE",
+    "verdict_rationale": "C3 FAILED on feasibility (migration complexity underestimated); C2 and C4 UNCERTAIN. Challenges revealed unaddressed migration path and query-pattern risks.",
+    "recommendation": "Quantify schema-flexibility friction with concrete examples; evaluate hybrid approach (JSONB in PostgreSQL) before committing to full migration."
+  },
+  "port": {
+    "claim_ids": ["C1", "C2", "C3", "C4"],
+    "assumption_ids": ["A1", "A2", "A3"],
+    "constraint_ids": ["K1", "K2"],
+    "judgment_ids": ["J1"],
+    "claims": {
+      "C1": "MongoDB provides greater schema flexibility than PostgreSQL.",
+      "C2": "The current schema rigidity is causing demonstrable development friction.",
+      "C3": "Migrating an existing PostgreSQL database to MongoDB is operationally feasible within the current team's capacity.",
+      "C4": "MongoDB's performance characteristics are acceptable for the existing query workload."
+    },
+    "verifiability": {
+      "C1": "V",
+      "C2": "V",
+      "C3": "V",
+      "C4": "V",
+      "A1": "J",
+      "A2": "V",
+      "A3": "J",
+      "K1": "C",
+      "K2": "C",
+      "J1": "J"
+    },
+    "verification_results": {
+      "C1": "VERIFIED",
+      "C2": "UNCERTAIN",
+      "C3": "FAILED",
+      "C4": "UNCERTAIN"
+    },
+    "verdict": "REVISE",
+    "verdict_rationale": "C3 FAILED on feasibility (migration complexity underestimated); C2 and C4 UNCERTAIN. Challenges revealed unaddressed migration path and query-pattern risks.",
+    "recommendation": "Quantify schema-flexibility friction with concrete examples; evaluate hybrid approach (JSONB in PostgreSQL) before committing to full migration."
+  }
+}

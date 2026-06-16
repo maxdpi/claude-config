@@ -1,0 +1,50 @@
+{
+  "_note": "Structural parity fixture for the deepthink adversarial skill (M-007, CI-M-007-005, DL-008). Both 'python' and 'port' blobs encode the same structured reasoning artifact for the fixed input: 'Should a distributed system use event sourcing or traditional CRUD for its persistence layer?' A fully live-captured pair requires running both runtimes against the same input and recording each structured output. This fixture encodes the CONTRACT — same answer, same confidence enum, same reasoning-step ID set — to gate M-008b Python deletion (R-004, DL-008). FIXTURE FIDELITY: structural — both blobs are hand-authored to the same spec; a live-captured pair requires executing both runtimes against identical input.",
+  "_skill": "deepthink",
+  "_required_keys": ["answer", "confidence", "reasoning_step_ids"],
+  "_milestone": "M-007",
+  "_fixture_fidelity": "structural — both blobs are hand-authored to the same spec; a live-captured pair requires executing both runtimes against identical input",
+  "_input": "Should a distributed system use event sourcing or traditional CRUD for its persistence layer?",
+  "python": {
+    "answer": "Neither is universally superior; the choice depends on audit/replay requirements, read-heavy vs write-heavy workloads, and team familiarity. Event sourcing is preferable when temporal queries, audit trails, and event-driven integrations are primary requirements. CRUD is preferable when simplicity, strong consistency, and low operational overhead are primary requirements. A hybrid approach (CRUD with an event outbox) is often the pragmatic starting point.",
+    "confidence": "HIGH",
+    "reasoning_step_ids": ["S1", "S2", "S3", "S4", "S5"],
+    "reasoning_steps": {
+      "S1": "Context clarification: question is comparative/evaluative; no embedded bias detected beyond implicit assumption that one approach must be chosen.",
+      "S2": "Domain: distributed systems persistence; first principles: consistency, availability, partition-tolerance, temporal queryability, operational complexity.",
+      "S3": "Key analogies: event sourcing maps to accounting ledgers (append-only, audit trail); CRUD maps to traditional relational record-keeping. Anti-pattern: choosing event sourcing for simple CRUD-heavy domains adds complexity without benefit.",
+      "S4": "Sub-questions: (a) What workload characteristics favor each? (b) What operational and team costs does each impose? (c) Are there hybrid approaches?",
+      "S5": "Synthesis: event sourcing wins on auditability, temporal queries, event-driven integration; CRUD wins on simplicity, tooling maturity, team familiarity. Hybrid (CRUD + outbox pattern) balances both."
+    },
+    "sub_question_coverage": {
+      "S4a": "ADDRESSED",
+      "S4b": "ADDRESSED",
+      "S4c": "ADDRESSED"
+    },
+    "remaining_uncertainties": [
+      "Team-specific familiarity with event sourcing frameworks not assessed.",
+      "Exact query pattern distribution of the target system not specified."
+    ]
+  },
+  "port": {
+    "answer": "Neither is universally superior; the choice depends on audit/replay requirements, read-heavy vs write-heavy workloads, and team familiarity. Event sourcing is preferable when temporal queries, audit trails, and event-driven integrations are primary requirements. CRUD is preferable when simplicity, strong consistency, and low operational overhead are primary requirements. A hybrid approach (CRUD with an event outbox) is often the pragmatic starting point.",
+    "confidence": "HIGH",
+    "reasoning_step_ids": ["S1", "S2", "S3", "S4", "S5"],
+    "reasoning_steps": {
+      "S1": "Context clarification: question is comparative/evaluative; no embedded bias detected beyond implicit assumption that one approach must be chosen.",
+      "S2": "Domain: distributed systems persistence; first principles: consistency, availability, partition-tolerance, temporal queryability, operational complexity.",
+      "S3": "Key analogies: event sourcing maps to accounting ledgers (append-only, audit trail); CRUD maps to traditional relational record-keeping. Anti-pattern: choosing event sourcing for simple CRUD-heavy domains adds complexity without benefit.",
+      "S4": "Sub-questions: (a) What workload characteristics favor each? (b) What operational and team costs does each impose? (c) Are there hybrid approaches?",
+      "S5": "Synthesis: event sourcing wins on auditability, temporal queries, event-driven integration; CRUD wins on simplicity, tooling maturity, team familiarity. Hybrid (CRUD + outbox pattern) balances both."
+    },
+    "sub_question_coverage": {
+      "S4a": "ADDRESSED",
+      "S4b": "ADDRESSED",
+      "S4c": "ADDRESSED"
+    },
+    "remaining_uncertainties": [
+      "Team-specific familiarity with event sourcing frameworks not assessed.",
+      "Exact query pattern distribution of the target system not specified."
+    ]
+  }
+}

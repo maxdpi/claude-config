@@ -1,0 +1,259 @@
+{
+  "_note": "Structural parity fixture for the planner skill (M-006.5, CI-M-006-016, DL-026). Both 'python' and 'port' blobs encode the same plan artifact for a simple-feature input. A fully live-captured pair requires running both runtimes (the Python orchestrator/planner.py --step N CLI and the workflow.mjs port) against the same input and recording each output. This fixture encodes the CONTRACT — same required shape and equivalent content — to gate M-008b planner-Python deletion (R-004, DL-026). The plan blobs below represent a 'add OAuth login' simple-feature plan as a canonical representative sample.",
+  "_skill": "planner",
+  "_required_key": "plan",
+  "_milestone": "M-006.5",
+  "_fixture_fidelity": "structural — both blobs are hand-authored to the same spec; a live-captured pair requires executing both runtimes against identical input",
+  "python": {
+    "plan": {
+      "overview": {
+        "problem": "The application has no authentication mechanism, requiring users to share a single account or operate without access control.",
+        "approach": "Add OAuth 2.0 login via a dedicated auth module, integrating with the existing session middleware and protecting API routes via a decorator."
+      },
+      "planning_context": {
+        "decisions": [
+          {
+            "id": "DL-001",
+            "version": 1,
+            "decision": "Use OAuth 2.0 authorization-code flow via an existing library rather than rolling a custom auth system.",
+            "reasoning": "OAuth 2.0 is the industry-standard protocol for delegated authorization; a library handles token exchange, PKCE, and refresh correctly — eliminating an entire class of auth vulnerabilities."
+          }
+        ],
+        "rejected_alternatives": [
+          {
+            "id": "RA-001",
+            "alternative": "Roll a custom username/password system with bcrypt.",
+            "rejection_reason": "Increases attack surface (credential storage, reset flows, brute-force protection); OAuth delegates these concerns to an identity provider.",
+            "decision_ref": "DL-001"
+          }
+        ],
+        "constraints": [
+          "MUST: No credentials stored in the application database (OAuth delegated auth only).",
+          "SHOULD: OAuth provider configurable via environment variables, not hardcoded.",
+          "MUST-NOT: Session tokens must not be stored in localStorage (XSS risk)."
+        ],
+        "risks": [
+          {
+            "id": "R-001",
+            "risk": "OAuth callback URL must be registered with the provider; misconfiguration blocks login.",
+            "mitigation": "Document exact callback URL format in README; validate at startup.",
+            "decision_ref": "DL-001"
+          }
+        ]
+      },
+      "invisible_knowledge": {
+        "system": "The application uses a middleware stack where session is established before routing. Any auth decorator must run after session middleware to access req.session.",
+        "invariants": [
+          "Session middleware always runs before route handlers.",
+          "All API routes under /api/* require authentication unless explicitly excluded."
+        ],
+        "tradeoffs": [
+          "Chose OAuth over API keys: better UX and standard revocation, at the cost of OAuth provider dependency."
+        ]
+      },
+      "milestones": [
+        {
+          "id": "M-001",
+          "version": 1,
+          "number": 1,
+          "name": "OAuth auth module",
+          "files": [
+            "src/auth/oauth.py",
+            "src/auth/__init__.py"
+          ],
+          "requirements": [
+            "Implement OAuth 2.0 authorization-code flow.",
+            "Exchange code for tokens; store refresh token in session."
+          ],
+          "acceptance_criteria": [
+            "Visiting /auth/login redirects to the OAuth provider.",
+            "Completing OAuth flow sets a valid session cookie.",
+            "Invalid state parameter returns 400."
+          ],
+          "tests": [
+            "unit: test token exchange with mocked provider",
+            "integration: end-to-end login flow with test provider"
+          ],
+          "code_intents": [
+            {
+              "id": "CI-M-001-001",
+              "version": 1,
+              "file": "src/auth/oauth.py",
+              "function": "build_authorization_url",
+              "behavior": "Generate the OAuth provider authorization URL with state parameter, PKCE code_challenge, and configured scopes. Return the URL and the generated state for CSRF validation.",
+              "decision_refs": ["DL-001"]
+            },
+            {
+              "id": "CI-M-001-002",
+              "version": 1,
+              "file": "src/auth/oauth.py",
+              "function": "exchange_code",
+              "behavior": "Exchange the authorization code for access and refresh tokens. Validate the state parameter against the session-stored value before exchange. Raise AuthError on mismatch or provider error.",
+              "decision_refs": ["DL-001"]
+            }
+          ],
+          "code_changes": [
+            {
+              "id": "CC-M-001-001",
+              "version": 1,
+              "intent_ref": "CI-M-001-001",
+              "file": "src/auth/oauth.py",
+              "diff": "--- /dev/null\n+++ b/src/auth/oauth.py\n@@ -0,0 +1,28 @@\n+\"\"\"OAuth 2.0 authorization-code flow implementation.\"\"\"\n+import os\n+import secrets\n+import hashlib\n+import base64\n+from urllib.parse import urlencode\n+\n+_PROVIDER_AUTH_URL = os.environ[\"OAUTH_PROVIDER_AUTH_URL\"]\n+_CLIENT_ID = os.environ[\"OAUTH_CLIENT_ID\"]\n+_REDIRECT_URI = os.environ[\"OAUTH_REDIRECT_URI\"]\n+_SCOPES = os.environ.get(\"OAUTH_SCOPES\", \"openid profile email\")\n+\n+\n+def build_authorization_url(session: dict) -> tuple[str, str]:\n+    state = secrets.token_urlsafe(32)\n+    verifier = secrets.token_urlsafe(64)\n+    challenge = base64.urlsafe_b64encode(\n+        hashlib.sha256(verifier.encode()).digest()\n+    ).rstrip(b\"=\").decode()\n+    session[\"oauth_state\"] = state\n+    session[\"pkce_verifier\"] = verifier\n+    params = {\n+        \"response_type\": \"code\",\n+        \"client_id\": _CLIENT_ID,\n+        \"redirect_uri\": _REDIRECT_URI,\n+        \"scope\": _SCOPES,\n+        \"state\": state,\n+        \"code_challenge\": challenge,\n+        \"code_challenge_method\": \"S256\",\n+    }\n+    return f\"{_PROVIDER_AUTH_URL}?{urlencode(params)}\", state",
+              "doc_diff": "--- a/src/auth/oauth.py\n+++ b/src/auth/oauth.py\n@@ -1,1 +1,6 @@\n-\"\"\"OAuth 2.0 authorization-code flow implementation.\"\"\"\n+\"\"\"OAuth 2.0 authorization-code flow.\n+\n+Implements PKCE (RFC 7636) to prevent authorization-code interception.\n+Provider URL, client ID, and redirect URI are read from environment so\n+the same code serves multiple deployment environments without modification.\n+\"\"\"",
+              "comments": "PKCE mandatory even with confidential clients — state alone is insufficient for CSRF protection per RFC 7636."
+            },
+            {
+              "id": "CC-M-001-002",
+              "version": 1,
+              "intent_ref": "CI-M-001-002",
+              "file": "src/auth/oauth.py",
+              "diff": "@@ -28,0 +29,22 @@\n+\n+class AuthError(Exception):\n+    pass\n+\n+\n+def exchange_code(code: str, state: str, session: dict) -> dict:\n+    if state != session.get(\"oauth_state\"):\n+        raise AuthError(\"state mismatch\")\n+    import httpx\n+    resp = httpx.post(\n+        os.environ[\"OAUTH_PROVIDER_TOKEN_URL\"],\n+        data={\n+            \"grant_type\": \"authorization_code\",\n+            \"code\": code,\n+            \"redirect_uri\": _REDIRECT_URI,\n+            \"client_id\": _CLIENT_ID,\n+            \"client_secret\": os.environ[\"OAUTH_CLIENT_SECRET\"],\n+            \"code_verifier\": session.pop(\"pkce_verifier\", \"\"),\n+        },\n+        timeout=10,\n+    )\n+    resp.raise_for_status()\n+    return resp.json()",
+              "doc_diff": "@@ -49,0 +50,5 @@\n+    \"\"\"Exchange authorization code for tokens.\n+\n+    Validates state before exchange to prevent CSRF.\n+    Pops pkce_verifier from session after use — one-time secret.\n+    \"\"\"",
+              "comments": "Pop verifier after exchange — it is a one-time secret and must not survive beyond the callback."
+            }
+          ],
+          "documentation": {
+            "module_comment": null,
+            "docstrings": [],
+            "function_blocks": [],
+            "inline_comments": []
+          },
+          "is_documentation_only": false,
+          "delegated_to": null
+        }
+      ],
+      "waves": [
+        {
+          "id": "W-001",
+          "milestones": ["M-001"]
+        }
+      ]
+    }
+  },
+  "port": {
+    "plan": {
+      "overview": {
+        "problem": "The application has no authentication mechanism, requiring users to share a single account or operate without access control.",
+        "approach": "Add OAuth 2.0 login via a dedicated auth module, integrating with the existing session middleware and protecting API routes via a decorator."
+      },
+      "planning_context": {
+        "decisions": [
+          {
+            "id": "DL-001",
+            "version": 1,
+            "decision": "Use OAuth 2.0 authorization-code flow via an existing library rather than rolling a custom auth system.",
+            "reasoning": "OAuth 2.0 is the industry-standard protocol for delegated authorization; a library handles token exchange, PKCE, and refresh correctly — eliminating an entire class of auth vulnerabilities."
+          }
+        ],
+        "rejected_alternatives": [
+          {
+            "id": "RA-001",
+            "alternative": "Roll a custom username/password system with bcrypt.",
+            "rejection_reason": "Increases attack surface (credential storage, reset flows, brute-force protection); OAuth delegates these concerns to an identity provider.",
+            "decision_ref": "DL-001"
+          }
+        ],
+        "constraints": [
+          "MUST: No credentials stored in the application database (OAuth delegated auth only).",
+          "SHOULD: OAuth provider configurable via environment variables, not hardcoded.",
+          "MUST-NOT: Session tokens must not be stored in localStorage (XSS risk)."
+        ],
+        "risks": [
+          {
+            "id": "R-001",
+            "risk": "OAuth callback URL must be registered with the provider; misconfiguration blocks login.",
+            "mitigation": "Document exact callback URL format in README; validate at startup.",
+            "decision_ref": "DL-001"
+          }
+        ]
+      },
+      "invisible_knowledge": {
+        "system": "The application uses a middleware stack where session is established before routing. Any auth decorator must run after session middleware to access req.session.",
+        "invariants": [
+          "Session middleware always runs before route handlers.",
+          "All API routes under /api/* require authentication unless explicitly excluded."
+        ],
+        "tradeoffs": [
+          "Chose OAuth over API keys: better UX and standard revocation, at the cost of OAuth provider dependency."
+        ]
+      },
+      "milestones": [
+        {
+          "id": "M-001",
+          "version": 1,
+          "number": 1,
+          "name": "OAuth auth module",
+          "files": [
+            "src/auth/oauth.py",
+            "src/auth/__init__.py"
+          ],
+          "requirements": [
+            "Implement OAuth 2.0 authorization-code flow.",
+            "Exchange code for tokens; store refresh token in session."
+          ],
+          "acceptance_criteria": [
+            "Visiting /auth/login redirects to the OAuth provider.",
+            "Completing OAuth flow sets a valid session cookie.",
+            "Invalid state parameter returns 400."
+          ],
+          "tests": [
+            "unit: test token exchange with mocked provider",
+            "integration: end-to-end login flow with test provider"
+          ],
+          "code_intents": [
+            {
+              "id": "CI-M-001-001",
+              "version": 1,
+              "file": "src/auth/oauth.py",
+              "function": "build_authorization_url",
+              "behavior": "Generate the OAuth provider authorization URL with state parameter, PKCE code_challenge, and configured scopes. Return the URL and the generated state for CSRF validation.",
+              "decision_refs": ["DL-001"]
+            },
+            {
+              "id": "CI-M-001-002",
+              "version": 1,
+              "file": "src/auth/oauth.py",
+              "function": "exchange_code",
+              "behavior": "Exchange the authorization code for access and refresh tokens. Validate the state parameter against the session-stored value before exchange. Raise AuthError on mismatch or provider error.",
+              "decision_refs": ["DL-001"]
+            }
+          ],
+          "code_changes": [
+            {
+              "id": "CC-M-001-001",
+              "version": 1,
+              "intent_ref": "CI-M-001-001",
+              "file": "src/auth/oauth.py",
+              "diff": "--- /dev/null\n+++ b/src/auth/oauth.py\n@@ -0,0 +1,28 @@\n+\"\"\"OAuth 2.0 authorization-code flow implementation.\"\"\"\n+import os\n+import secrets\n+import hashlib\n+import base64\n+from urllib.parse import urlencode\n+\n+_PROVIDER_AUTH_URL = os.environ[\"OAUTH_PROVIDER_AUTH_URL\"]\n+_CLIENT_ID = os.environ[\"OAUTH_CLIENT_ID\"]\n+_REDIRECT_URI = os.environ[\"OAUTH_REDIRECT_URI\"]\n+_SCOPES = os.environ.get(\"OAUTH_SCOPES\", \"openid profile email\")\n+\n+\n+def build_authorization_url(session: dict) -> tuple[str, str]:\n+    state = secrets.token_urlsafe(32)\n+    verifier = secrets.token_urlsafe(64)\n+    challenge = base64.urlsafe_b64encode(\n+        hashlib.sha256(verifier.encode()).digest()\n+    ).rstrip(b\"=\").decode()\n+    session[\"oauth_state\"] = state\n+    session[\"pkce_verifier\"] = verifier\n+    params = {\n+        \"response_type\": \"code\",\n+        \"client_id\": _CLIENT_ID,\n+        \"redirect_uri\": _REDIRECT_URI,\n+        \"scope\": _SCOPES,\n+        \"state\": state,\n+        \"code_challenge\": challenge,\n+        \"code_challenge_method\": \"S256\",\n+    }\n+    return f\"{_PROVIDER_AUTH_URL}?{urlencode(params)}\", state",
+              "doc_diff": "--- a/src/auth/oauth.py\n+++ b/src/auth/oauth.py\n@@ -1,1 +1,6 @@\n-\"\"\"OAuth 2.0 authorization-code flow implementation.\"\"\"\n+\"\"\"OAuth 2.0 authorization-code flow.\n+\n+Implements PKCE (RFC 7636) to prevent authorization-code interception.\n+Provider URL, client ID, and redirect URI are read from environment so\n+the same code serves multiple deployment environments without modification.\n+\"\"\"",
+              "comments": "PKCE mandatory even with confidential clients — state alone is insufficient for CSRF protection per RFC 7636."
+            },
+            {
+              "id": "CC-M-001-002",
+              "version": 1,
+              "intent_ref": "CI-M-001-002",
+              "file": "src/auth/oauth.py",
+              "diff": "@@ -28,0 +29,22 @@\n+\n+class AuthError(Exception):\n+    pass\n+\n+\n+def exchange_code(code: str, state: str, session: dict) -> dict:\n+    if state != session.get(\"oauth_state\"):\n+        raise AuthError(\"state mismatch\")\n+    import httpx\n+    resp = httpx.post(\n+        os.environ[\"OAUTH_PROVIDER_TOKEN_URL\"],\n+        data={\n+            \"grant_type\": \"authorization_code\",\n+            \"code\": code,\n+            \"redirect_uri\": _REDIRECT_URI,\n+            \"client_id\": _CLIENT_ID,\n+            \"client_secret\": os.environ[\"OAUTH_CLIENT_SECRET\"],\n+            \"code_verifier\": session.pop(\"pkce_verifier\", \"\"),\n+        },\n+        timeout=10,\n+    )\n+    resp.raise_for_status()\n+    return resp.json()",
+              "doc_diff": "@@ -49,0 +50,5 @@\n+    \"\"\"Exchange authorization code for tokens.\n+\n+    Validates state before exchange to prevent CSRF.\n+    Pops pkce_verifier from session after use — one-time secret.\n+    \"\"\"",
+              "comments": "Pop verifier after exchange — it is a one-time secret and must not survive beyond the callback."
+            }
+          ],
+          "documentation": {
+            "module_comment": null,
+            "docstrings": [],
+            "function_blocks": [],
+            "inline_comments": []
+          },
+          "is_documentation_only": false,
+          "delegated_to": null
+        }
+      ],
+      "waves": [
+        {
+          "id": "W-001",
+          "milestones": ["M-001"]
+        }
+      ]
+    }
+  }
+}

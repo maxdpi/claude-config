@@ -1,0 +1,88 @@
+{
+  "_note": "Structural parity fixture for the problem-analysis adversarial skill (M-007, CI-M-007-005, DL-008). Both 'python' and 'port' blobs encode the same structured root cause artifact for the fixed input: 'When a user submits a payment form, the transaction succeeds but the confirmation email is never sent, even though no error is logged.' A fully live-captured pair requires running both runtimes against the same input and recording each structured output. This fixture encodes the CONTRACT — same root_cause id, same confirmed-hypothesis ID set, same causal chain structure — to gate M-008b Python deletion (R-004, DL-008). FIXTURE FIDELITY: structural — both blobs are hand-authored to the same spec; a live-captured pair requires executing both runtimes against identical input.",
+  "_skill": "problem-analysis",
+  "_required_keys": ["root_cause_id", "confirmed_hypothesis_ids", "root_cause"],
+  "_milestone": "M-007",
+  "_fixture_fidelity": "structural — both blobs are hand-authored to the same spec; a live-captured pair requires executing both runtimes against identical input",
+  "_input": "When a user submits a payment form, the transaction succeeds but the confirmation email is never sent, even though no error is logged.",
+  "python": {
+    "root_cause_id": "RC-001",
+    "confirmed_hypothesis_ids": ["H2"],
+    "refuted_hypothesis_ids": ["H1", "H3"],
+    "root_cause": "The email dispatch call executes inside an async fire-and-forget context that swallows exceptions without propagating them, so email delivery failures are silently discarded after the HTTP response is committed.",
+    "causal_chain": [
+      "Payment transaction commits successfully",
+      "Email dispatch is called in a fire-and-forget async context",
+      "Email service returns an error (misconfigured SMTP credentials)",
+      "Exception is swallowed inside the async context (no propagation path)",
+      "No error is logged; HTTP response already committed",
+      "User sees success; confirmation email never arrives"
+    ],
+    "hypotheses": {
+      "H1": {
+        "name": "Email service outage",
+        "status": "CONTRADICTED",
+        "reason": "Email service responds to health-check; no outage recorded in logs"
+      },
+      "H2": {
+        "name": "Exception swallowed in async context",
+        "status": "SUPPORTED",
+        "reason": "payment_callback.py line 87: send_email() called inside asyncio.ensure_future() with no error handler; SMTP auth error thrown but not propagated"
+      },
+      "H3": {
+        "name": "Email queued but worker not running",
+        "status": "CONTRADICTED",
+        "reason": "No task queue found; email is sent synchronously (or fire-and-forget), not via a worker queue"
+      }
+    },
+    "confidence": "HIGH",
+    "framing_checks": {
+      "positive_framing": "PASS",
+      "solution_independence": "PASS"
+    },
+    "remaining_uncertainties": [
+      "Exact SMTP credentials error message not confirmed (would require runtime log capture).",
+      "Whether other async fire-and-forget calls have the same pattern (scope of systemic issue)."
+    ]
+  },
+  "port": {
+    "root_cause_id": "RC-001",
+    "confirmed_hypothesis_ids": ["H2"],
+    "refuted_hypothesis_ids": ["H1", "H3"],
+    "root_cause": "The email dispatch call executes inside an async fire-and-forget context that swallows exceptions without propagating them, so email delivery failures are silently discarded after the HTTP response is committed.",
+    "causal_chain": [
+      "Payment transaction commits successfully",
+      "Email dispatch is called in a fire-and-forget async context",
+      "Email service returns an error (misconfigured SMTP credentials)",
+      "Exception is swallowed inside the async context (no propagation path)",
+      "No error is logged; HTTP response already committed",
+      "User sees success; confirmation email never arrives"
+    ],
+    "hypotheses": {
+      "H1": {
+        "name": "Email service outage",
+        "status": "CONTRADICTED",
+        "reason": "Email service responds to health-check; no outage recorded in logs"
+      },
+      "H2": {
+        "name": "Exception swallowed in async context",
+        "status": "SUPPORTED",
+        "reason": "payment_callback.py line 87: send_email() called inside asyncio.ensure_future() with no error handler; SMTP auth error thrown but not propagated"
+      },
+      "H3": {
+        "name": "Email queued but worker not running",
+        "status": "CONTRADICTED",
+        "reason": "No task queue found; email is sent synchronously (or fire-and-forget), not via a worker queue"
+      }
+    },
+    "confidence": "HIGH",
+    "framing_checks": {
+      "positive_framing": "PASS",
+      "solution_independence": "PASS"
+    },
+    "remaining_uncertainties": [
+      "Exact SMTP credentials error message not confirmed (would require runtime log capture).",
+      "Whether other async fire-and-forget calls have the same pattern (scope of systemic issue)."
+    ]
+  }
+}
