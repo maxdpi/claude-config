@@ -36,6 +36,7 @@ if str(_SCRIPTS) not in sys.path:
 from skills.lib.workflow.persistence.registry import list_runs, find_run
 from skills.lib.workflow.persistence.projection import replay
 from skills.lib.workflow.persistence.atomic import write_atomic
+from skills.lib.workflow.persistence.workflow_bridge import bridge_session_workflows
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
@@ -52,6 +53,20 @@ def main(payload: dict | None = None) -> int:
     Returns:
         Always 0 (non-fatal hook).
     """
+    # Bridge Workflow run-states for the ending session into the durable substrate
+    # before the runtime directories are reaped.
+    session_id: str | None = None
+    if payload:
+        session_id = (
+            payload.get("session_id")
+            or payload.get("sessionId")
+        )
+    if session_id:
+        try:
+            bridge_session_workflows(session_id)
+        except Exception:
+            log.warning("session_end_hook: workflow bridge failed", exc_info=True)
+
     for run_summary in list_runs():
         if run_summary.get("status") not in _RUNNING_STATUSES:
             continue

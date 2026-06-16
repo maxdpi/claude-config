@@ -30,6 +30,22 @@ export const meta = {
     "contextualize",
     "synthesize",
   ],
+  /**
+   * Phase trust manifest (DL-014, DL-006).
+   * Consumed by the hook-driven bridge (workflow_bridge.py) to populate manifest.json.
+   * NOTE: the AUTHORITATIVE phase record is the hook bridge, not the DURABLE_EVENT
+   * log() lines. The log lines are human breadcrumbs only.
+   *
+   * All phases are read_only (analysis/exploration; no filesystem writes).
+   */
+  phaseTrust: {
+    "mode_selection":  "read_only",
+    "dispatch":        "read_only",
+    "triage":          "read_only",
+    "cluster":         "read_only",
+    "contextualize":   "read_only",
+    "synthesize":      "read_only",
+  },
 };
 
 const DEFAULT_CATEGORY_COUNT = 10;

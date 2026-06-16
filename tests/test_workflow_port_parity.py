@@ -12,9 +12,21 @@ Two test functions:
 
 2. test_workflow_port_output_parity (CI-M-006-008)
    Iterates over tests/fixtures/workflow_port_parity/*.json, each shaped
-   {"python":{...},"port":{...}}, and asserts data["port"][key]==data["python"][key]
-   on the required key per skill. A MISSING fixture is a hard pytest.fail
-   (NEVER a skip) — this is the M-008b deletion gate (R-004).
+   {"python":{...},"port":{...},"_fixture_fidelity":"hand-authored-contract"},
+   and asserts data["port"][key]==data["python"][key] on the required key per
+   skill. A MISSING fixture is a hard pytest.fail (NEVER a skip) — this is the
+   M-008b deletion gate (R-004).
+
+   FIXTURE FIDELITY CAVEAT (Task C / parity-honesty finding):
+   All fixtures carry ``_fixture_fidelity: "hand-authored-contract"`` because
+   capturing both runtimes (Python orchestrator + workflow.mjs port) against the
+   same input requires both to be live-executable simultaneously, which is not
+   possible during the port period. The gate is STRUCTURAL, not behavioral: it
+   asserts that both blobs encode the same artifact shape and content, proving
+   the contract is met. A missing or mismatched fixture is still a hard failure —
+   the gate cannot be bypassed. A passing test with ``hand-authored-contract``
+   fidelity means the schema/contract is honored, NOT that the live port
+   produces identical output to the live Python runtime on the same input.
 
 Planner (M-006.5, DL-026):
    The planner is now included in the main DATA-DRIVEN parity loop with
@@ -27,6 +39,7 @@ from __future__ import annotations
 
 import json
 import time
+import warnings
 from pathlib import Path
 
 import pytest
@@ -308,6 +321,24 @@ def test_workflow_port_output_parity(skill: str, required_key: str) -> None:
         f"Fixture {fixture_path} missing 'port' blob"
     )
 
+    # Task C (parity-honesty): every fixture must declare _fixture_fidelity.
+    assert "_fixture_fidelity" in data, (
+        f"Fixture {fixture_path} missing '_fixture_fidelity' field. "
+        f"Add '_fixture_fidelity': 'hand-authored-contract' (or 'live-captured') "
+        f"to make the gate's behavioral limitations machine-readable."
+    )
+    fidelity = data["_fixture_fidelity"]
+    if "hand-authored" in fidelity or fidelity == "hand-authored-contract":
+        warnings.warn(
+            f"[PARITY GATE — STRUCTURAL NOT BEHAVIORAL] skill='{skill}' "
+            f"fixture={fixture_path.name!r}: fidelity={fidelity!r}. "
+            f"This gate asserts CONTRACT SHAPE equality between hand-authored blobs. "
+            f"It does NOT prove the live workflow.mjs port produces identical output "
+            f"to the live Python runtime on the same input. "
+            f"To upgrade to behavioral fidelity, capture live outputs from both runtimes.",
+            stacklevel=2,
+        )
+
     python_blob = data["python"]
     port_blob = data["port"]
 
@@ -428,3 +459,6 @@ def test_planner_workflow_durable_event_wiring() -> None:
     assert "port" in data, f"planner fixture {fixture_path} missing 'port' blob"
     assert "plan" in data["python"], "planner fixture 'python' blob missing required key 'plan'"
     assert "plan" in data["port"], "planner fixture 'port' blob missing required key 'plan'"
+    assert "_fixture_fidelity" in data, (
+        f"Planner fixture {fixture_path} missing '_fixture_fidelity' field (Task C)."
+    )

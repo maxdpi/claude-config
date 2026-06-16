@@ -283,13 +283,9 @@ def rederive_from_journal(
 
         event = _journal_entry_to_event(entry, run_dir.run_id, key)
         if event is not None:
-            try:
-                append_event(run_dir, event)
-                appended += 1
-            except AssertionError:
-                # Event too large for PIPE_BUF atomicity — skip and log
-                # (bridge is best-effort per DL-013)
-                pass
+            # append_event truncates oversized payloads and never silently drops events.
+            append_event(run_dir, event)
+            appended += 1
 
     return appended
 
@@ -371,11 +367,9 @@ def bridge_journal(
 
             event = _journal_entry_to_event(entry, effective_run_id, key)
             if event is not None:
-                try:
-                    append_event(run_dir, event)
-                    appended += 1
-                except AssertionError:
-                    pass  # Too large — best-effort skip (DL-013)
+                # append_event truncates oversized payloads and never silently drops events.
+                append_event(run_dir, event)
+                appended += 1
 
     return {
         "bridged": True,

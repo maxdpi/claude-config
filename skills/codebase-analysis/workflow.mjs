@@ -22,6 +22,20 @@ export const meta = {
   name: "codebase-analysis",
   description: "Understanding-focused codebase comprehension workflow",
   phases: ["scope", "survey", "deepen", "synthesize"],
+  /**
+   * Phase trust manifest (DL-014, DL-006).
+   * Consumed by the hook-driven bridge (workflow_bridge.py) to populate manifest.json.
+   * NOTE: the AUTHORITATIVE phase record is the hook bridge, not the DURABLE_EVENT
+   * log() lines below. The log lines are human breadcrumbs only.
+   *
+   * All phases are read_only (exploration/analysis; no filesystem writes).
+   */
+  phaseTrust: {
+    "scope":      "read_only",
+    "survey":     "read_only",
+    "deepen":     "read_only",
+    "synthesize": "read_only",
+  },
 };
 
 const MAX_DEEPEN_ITERATIONS = 4;

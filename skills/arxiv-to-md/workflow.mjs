@@ -22,6 +22,19 @@ export const meta = {
   name: "arxiv-to-md",
   description: "Convert arXiv papers to LLM-consumable markdown",
   phases: ["discover", "convert", "finalize"],
+  /**
+   * Phase trust manifest (DL-014, DL-006).
+   * Consumed by the hook-driven bridge (workflow_bridge.py) to populate manifest.json.
+   * NOTE: the AUTHORITATIVE phase record is the hook bridge, not the DURABLE_EVENT
+   * log() lines. The log lines are human breadcrumbs only.
+   *
+   * Discover is read_only (scan + lookup). Convert/finalize write files.
+   */
+  phaseTrust: {
+    "discover": "read_only",
+    "convert":  "write",
+    "finalize": "write",
+  },
 };
 
 export async function run() {

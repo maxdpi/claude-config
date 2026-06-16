@@ -26,6 +26,7 @@ if str(_SCRIPTS) not in sys.path:
 
 from skills.lib.workflow.persistence.registry import list_runs
 from skills.lib.workflow.persistence.retention import prune_runs
+from skills.lib.workflow.persistence.workflow_bridge import bridge_session_workflows
 
 _INCOMPLETE_STATUSES: frozenset[str] = frozenset({"running", "crashed"})
 
@@ -57,6 +58,23 @@ def main(payload: dict | None = None) -> int:
     Returns:
         Always 0.
     """
+    # Step 0: bridge any Workflow run-states from previous sessions before checking
+    # for incomplete runs. This feeds the resume offer with real phase data.
+    session_id: str | None = None
+    if payload:
+        session_id = (
+            payload.get("session_id")
+            or payload.get("sessionId")
+        )
+    if session_id:
+        try:
+            bridge_session_workflows(session_id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "session_start_hook: workflow bridge failed", exc_info=True
+            )
+
     # Step 1: prune done/tombstoned runs past retention TTL.
     pruned = prune_runs()
     if pruned:

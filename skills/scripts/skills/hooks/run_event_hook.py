@@ -188,6 +188,7 @@ def _copy_native_transcript(
     dest = dest_dir / "transcript.jsonl"
 
     # Atomic copy: write to a temp file in the same dir, then rename.
+    tmp_path: str | None = None
     try:
         fd, tmp_path = tempfile.mkstemp(dir=dest_dir, prefix=".tmp-transcript-")
         try:
@@ -196,18 +197,28 @@ def _copy_native_transcript(
                 out_fh.flush()
                 os.fsync(out_fh.fileno())
         except Exception:
-            # Close fd before we try to remove the temp file.
+            # fd is already closed by the context manager if the with block entered.
+            # If the open() itself raised (before the with block), fd is still open;
+            # close it before attempting cleanup.
             try:
                 os.close(fd)
             except OSError:
                 pass
             raise
         os.rename(tmp_path, dest)
+        tmp_path = None  # Rename succeeded — temp path no longer needs cleanup
     except Exception:
         log.warning(
             "run_event_hook: copy-on-stop: failed to copy %s -> %s",
             src, dest, exc_info=True,
         )
+    finally:
+        # Unlink the temp file if the rename did not consume it (leaked on error).
+        if tmp_path is not None:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------

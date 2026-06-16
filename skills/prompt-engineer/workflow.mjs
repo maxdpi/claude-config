@@ -24,6 +24,24 @@ export const meta = {
   name: "prompt-engineer",
   description: "Scope-adaptive prompt optimization workflow",
   phases: ["triage", "assess", "plan", "draft", "refine", "approve", "execute"],
+  /**
+   * Phase trust manifest (DL-014, DL-006).
+   * Consumed by the hook-driven bridge (workflow_bridge.py) to populate manifest.json.
+   * NOTE: the AUTHORITATIVE phase record is the hook bridge, not the DURABLE_EVENT
+   * log() lines. The log lines are human breadcrumbs only.
+   *
+   * Analysis/planning phases are read_only. Draft/refine/approve are write (produce
+   * artifacts). Execute writes to target files.
+   */
+  phaseTrust: {
+    "triage":  "read_only",
+    "assess":  "read_only",
+    "plan":    "read_only",
+    "draft":   "write",
+    "refine":  "write",
+    "approve": "write",
+    "execute": "execute",
+  },
 };
 
 const REFINE_INSTRUCTIONS = `VERIFY each proposed technique (factored verification):

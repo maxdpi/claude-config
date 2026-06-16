@@ -3,6 +3,7 @@
   "_skill": "codebase-analysis",
   "_required_key": "synthesis",
   "_milestone": "M-006",
+  "_fixture_fidelity": "hand-authored-contract",
   "python": {
     "synthesis": "# Codebase Understanding Summary\n\n## Structure\nThe project is organized as a Python package under skills/scripts/skills/ with separate modules per skill. Each skill has an orchestrator + subagent entry point. The lib/workflow/persistence/ module provides the durable event-sourcing substrate.\n\n## Patterns\nStep-based re-invocation pattern via --step CLI arguments. Each step outputs the next command to invoke. Parallel Explore agents for survey phases. Events are append-only; projections are pure fold reductions.\n\n## Flows\nUser request -> SCOPE (define goals) -> SURVEY (parallel Explore agents per focus area) -> DEEPEN (iterative direct exploration, max 4 iterations, confidence-gated) -> SYNTHESIZE (structured summary output)\n\n## Decisions\nPython orchestration layer manages step sequencing via format_step() + build_next_command(). Skill-level persistence via events.jsonl. Subagent dispatch via roster_dispatch(). The layer is being retired in M-008b in favor of native Workflow tool ports.\n\n## Context\nThe codebase implements a Claude Code skill harness with durable persistence for cross-session resume. Skills produce structured outputs via a step-injection pattern that is being replaced by native Workflow tool phases."
   },

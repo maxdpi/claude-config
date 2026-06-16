@@ -3,6 +3,7 @@
   "_skill": "incoherence",
   "_required_key": "verdicts",
   "_milestone": "M-006",
+  "_fixture_fidelity": "hand-authored-contract",
   "python": {
     "verdicts": [
       {

@@ -44,7 +44,7 @@ def _resolve_base_dir() -> Path:
     The key name is ``skillRuns.baseDir``.  If the settings file is absent or
     malformed the default ``~/.claude/skill-runs`` is used silently.
     """
-    for name in ("settings.json", "settings.local.json"):
+    for name in ("settings.local.json", "settings.json"):
         p = _CLAUDE_DIR / name
         if not p.exists():
             continue

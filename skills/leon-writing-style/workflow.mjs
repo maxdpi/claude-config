@@ -48,6 +48,27 @@ export const meta = {
     "refinement",
     "final_review",
   ],
+  /**
+   * Phase trust manifest (DL-014, DL-006).
+   * Consumed by the hook-driven bridge (workflow_bridge.py) to populate manifest.json.
+   * NOTE: the AUTHORITATIVE phase record is the hook bridge, not the DURABLE_EVENT
+   * log() lines. The log lines are human breadcrumbs only.
+   *
+   * Understanding/verification phases are read_only (analysis only).
+   * Drafting/refinement phases are write (produce artifacts in memory; final_review
+   * outputs the publication-ready content).
+   */
+  phaseTrust: {
+    "content_classification": "read_only",
+    "purpose_audience":       "read_only",
+    "draft":                  "write",
+    "ai_tells_detection":     "read_only",
+    "positive_markers":       "read_only",
+    "structural_metrics":     "read_only",
+    "voice_consistency":      "read_only",
+    "refinement":             "write",
+    "final_review":           "write",
+  },
 };
 
 const HISTORY_TEMPLATE = `

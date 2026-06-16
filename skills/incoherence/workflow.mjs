@@ -39,6 +39,26 @@ export const meta = {
     "application",
     "report",
   ],
+  /**
+   * Phase trust manifest (DL-014, DL-006).
+   * Consumed by the hook-driven bridge (workflow_bridge.py) to populate manifest.json.
+   * NOTE: the AUTHORITATIVE phase record is the hook bridge, not the DURABLE_EVENT
+   * log() lines. The log lines are human breadcrumbs only.
+   *
+   * Detection phases are read_only. Resolution is write (user decides).
+   * Application is execute (writes files). Report is read_only.
+   */
+  phaseTrust: {
+    "survey":                "read_only",
+    "dimension_select":      "read_only",
+    "broad_sweep":           "read_only",
+    "synthesize_candidates": "read_only",
+    "deep_dive":             "read_only",
+    "verdict_analysis":      "read_only",
+    "resolution":            "write",
+    "application":           "execute",
+    "report":                "read_only",
+  },
 };
 
 const DIMENSION_CATALOG = `

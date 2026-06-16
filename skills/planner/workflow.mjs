@@ -443,8 +443,8 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
   log("DURABLE_EVENT: subagent_completed quality-reviewer plan-design-qr");
   log("DURABLE_EVENT: phase_completed plan-design-qr");
 
-  // Extract the approved plan JSON
-  const approvedDesign = designResult;
+  // Propagate the fixed design if QR triggered a fix pass.
+  const approvedDesign = (typeof designFixed !== "undefined" && designFixed) ? designFixed : designResult;
 
   // ── Phase 5: plan-code-work ───────────────────────────────────────────────
   phase("plan-code-work");
@@ -504,7 +504,8 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
   log("DURABLE_EVENT: subagent_completed quality-reviewer plan-code-qr");
   log("DURABLE_EVENT: phase_completed plan-code-qr");
 
-  const approvedCode = codeResult;
+  // Propagate the fixed code if QR triggered a fix pass.
+  const approvedCode = (typeof codeFixed !== "undefined" && codeFixed) ? codeFixed : codeResult;
 
   // ── Phase 7: plan-docs-work ───────────────────────────────────────────────
   phase("plan-docs-work");

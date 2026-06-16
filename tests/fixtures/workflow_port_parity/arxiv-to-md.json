@@ -3,6 +3,7 @@
   "_skill": "arxiv-to-md",
   "_required_key": "markdown",
   "_milestone": "M-006",
+  "_fixture_fidelity": "hand-authored-contract",
   "python": {
     "markdown": {
       "converted": ["2503.05179"],

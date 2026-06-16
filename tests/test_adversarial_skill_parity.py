@@ -16,8 +16,16 @@ runtime for these skills. They test OUTPUT EQUIVALENCE, not fallback behavior
 HARD GATE: A missing fixture is pytest.fail (NEVER a skip) — the R-004 / M-008b gate.
 A skipped parity test can never let M-008b proceed.
 
+FIXTURE FIDELITY CAVEAT (Task C / parity-honesty finding):
+All fixtures carry ``_fixture_fidelity: "hand-authored-contract"`` because capturing
+both runtimes simultaneously requires both to be live-executable, which is not
+possible during the port period. The gate is STRUCTURAL, not behavioral. A passing
+test means the contract shape is honored; it does NOT prove the live port produces
+identical output to the live Python runtime on the same input. Visible warnings are
+emitted when a hand-authored-contract fixture is asserted.
+
 Fixture format: tests/fixtures/adversarial_skill_parity/<skill>.json
-  {"python": {...}, "port": {...}}
+  {"python": {...}, "port": {...}, "_fixture_fidelity": "hand-authored-contract"}
 
 Per-skill required keys (structural decision fields):
   decision-critic  → claim_ids (list) + verdict (string)
@@ -27,6 +35,7 @@ Per-skill required keys (structural decision fields):
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 import pytest
@@ -64,6 +73,23 @@ def _load_fixture(skill: str) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     assert "python" in data, f"Fixture {path} missing 'python' blob"
     assert "port" in data, f"Fixture {path} missing 'port' blob"
+    # Task C (parity-honesty): fixture must declare its fidelity level.
+    assert "_fixture_fidelity" in data, (
+        f"Fixture {path} missing '_fixture_fidelity' field. "
+        f"Add '_fixture_fidelity': 'hand-authored-contract' (or 'live-captured') "
+        f"to make the gate's behavioral limitations machine-readable."
+    )
+    fidelity = data["_fixture_fidelity"]
+    if "hand-authored" in fidelity or fidelity == "hand-authored-contract":
+        warnings.warn(
+            f"[PARITY GATE — STRUCTURAL NOT BEHAVIORAL] skill='{skill}' "
+            f"fixture={path.name!r}: fidelity={fidelity!r}. "
+            f"This gate asserts CONTRACT SHAPE equality between hand-authored blobs. "
+            f"It does NOT prove the live port produces identical output to the live "
+            f"Python runtime on the same input. "
+            f"To upgrade, capture live outputs from both runtimes.",
+            stacklevel=2,
+        )
     return data
 
 
