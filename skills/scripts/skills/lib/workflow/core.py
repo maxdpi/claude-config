@@ -1,10 +1,19 @@
-"""Data-driven workflow architecture.
+"""Data-driven workflow architecture (LEGACY -- migration target M-008b).
 
-Simplified Workflow/StepDef architecture for workflow introspection and
-validation. The execution engine (Workflow.run()) was removed because skills
-use CLI-based step invocation via format_output() functions.
+LEGACY: Step-dispatch tables and re-invocation control flow — superseded by
+native Workflow tool / Agent Teams + durable substrate. Scheduled for deletion
+in M-008b.
 
-What remains:
+Simplified Workflow/StepDef architecture (LEGACY -- migration target M-008).
+
+The step-dispatch tables and re-invocation control flow are superseded by
+native Workflow-tool control flow in .mjs ports. Retained for Python-CLI
+skills not yet ported. When parity gate R-004 passes, remove step-dispatch
+tables; retain only domain helpers still used by ported skills.
+Deletion gate: remove step-dispatch tables after parity gate (R-004) passes;
+retain only domain helpers still consumed by ported skills. (ref: DL-008)
+
+Current contents (retained until port parity):
 - StepDef: Step metadata (id, title, actions)
 - Workflow: Collection of steps with validation
 - Arg: Parameter metadata for CLI arguments

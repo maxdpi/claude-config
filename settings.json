@@ -1,5 +1,5 @@
 {
-  "//": "skill-runs substrate config: skillRuns.baseDir (DL-001/C-003), skillRuns.retentionDays (DL-005), CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS (DL-009)",
+  "//": "skill-runs substrate config: skillRuns.baseDir (DL-001/C-003), skillRuns.retentionDays (DL-005), CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS (DL-009). Spawn restriction (DL-015, M-008b): Python dispatch-prose guards removed; spawn surface now constrained by native primitives only — Agent(type) allowlists in each orchestrator/lead definition's tools field; permissions.deny:[\"Agent(<name>)\"] here for disabled agents; headless: set CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1.",
   "theme": "dark",
   "permissions": {
     "defaultMode": "auto"
