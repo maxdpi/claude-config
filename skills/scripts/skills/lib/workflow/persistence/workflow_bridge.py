@@ -106,17 +106,23 @@ def _extract_phase_trust(mjs_source: str) -> dict[str, str]:
 
 
 def _find_mjs(workflow_name: str) -> Path | None:
-    """Locate ``skills/{workflowName}/workflow.mjs`` relative to the repo root.
+    """Locate ``<root>/skills/{workflowName}/workflow.mjs`` for the current layout.
 
-    The repo root is derived from this file's location inside the Python package
-    (skills/scripts/skills/lib/workflow/persistence/workflow_bridge.py).
+    Works in BOTH layouts without hard-coded level counts:
+      - repo checkout:  <repo>/skills/<name>/workflow.mjs
+      - ~/.claude install: ~/.claude/skills/<name>/workflow.mjs
+    This file lives at ``.../skills/scripts/skills/lib/workflow/persistence/
+    workflow_bridge.py`` — i.e. UNDER an outer ``skills/`` dir that is the sibling
+    parent of the per-skill dirs. We walk every ``skills``-named ancestor and
+    return the first where ``<ancestor>/<name>/workflow.mjs`` exists (the inner
+    ``scripts/skills`` ancestor won't match; the outer one will).
     """
-    # This file: .../skills/scripts/skills/lib/workflow/persistence/workflow_bridge.py
-    # Repo root: six levels up from here.
-    repo_root = Path(__file__).parent.parent.parent.parent.parent.parent
-    candidate = repo_root / "skills" / workflow_name / "workflow.mjs"
-    if candidate.exists():
-        return candidate
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        if ancestor.name == "skills":
+            candidate = ancestor / workflow_name / "workflow.mjs"
+            if candidate.exists():
+                return candidate
     return None
 
 
