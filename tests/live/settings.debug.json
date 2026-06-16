@@ -1,0 +1,103 @@
+{
+  "//INSTRUCTIONS": [
+    "HOW TO MERGE: Copy the 'hooks' block below into ~/.claude/settings.json,",
+    "merging each hook event key with any existing entries.",
+    "IMPORTANT: The dump_payload_hook entries should be ADDED ALONGSIDE (not",
+    "replacing) any existing production hook entries for the same events.",
+    "",
+    "HOW TO UNINSTALL: Remove the 'dump_payload_hook' command entries from",
+    "each hook list in ~/.claude/settings.json. The production hook entries",
+    "(skills/hooks/*.py) should remain.",
+    "",
+    "Replace REPO_ROOT below with the absolute path to your claude-config repo,",
+    "e.g. /Users/ethnet/Documents/GitHub/claude-config",
+    "The hook script path is: REPO_ROOT/.claude/skills/scripts/../../../tests/live/hooks/dump_payload_hook.py",
+    "Simplified: REPO_ROOT/tests/live/hooks/dump_payload_hook.py",
+    "",
+    "WHAT IT WRITES: Only ~/.claude/skill-runs-debug/payloads-<EVENT>.jsonl",
+    "WHAT IT NEVER TOUCHES: ~/.claude/teams, ~/.claude/tasks, ~/.claude/skill-runs"
+  ],
+  "hooks": {
+    "SubagentStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py SubagentStart"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py SubagentStop"
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py TaskCreated"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py TaskCompleted"
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py TeammateIdle"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py SessionStart"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py Stop"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /REPO_ROOT/tests/live/hooks/dump_payload_hook.py SessionEnd"
+          }
+        ]
+      }
+    ]
+  }
+}
