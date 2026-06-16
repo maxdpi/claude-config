@@ -5,8 +5,9 @@ No live LLM or session required. Pure structural checks that codify
 manual verification done during the migration of 10 skills from
 the deleted Python --step runtime to native runtimes:
 
-  Linear (7):     skills/<name>/workflow.mjs  (Workflow tool)
-  Adversarial (3): skills/<name>/team.md      (Agent Teams)
+  Linear (7):      skills/<name>/workflow.mjs  (Workflow tool)
+  Adversarial (3): skills/<name>/SKILL.md      (lead spawns Agent Teams
+                   teammates or Agent-tool subagents; no team.md construct)
 
 Non-ported (excluded from #1/#2): cc-history, doc-sync.
 """
@@ -90,7 +91,8 @@ class TestNoStepCLIInSkillMd:
 # Test 2: Each ported skill names its native runtime in SKILL.md
 # ===========================================================================
 class TestNativeRuntimeReference:
-    """Linear skills must mention workflow.mjs/Workflow tool; adversarial mention team.md/Agent Team."""
+    """Linear skills must mention workflow.mjs/Workflow tool; adversarial skills must
+    describe the real Agent Teams / Agent-tool subagent orchestration mechanism."""
 
     @pytest.mark.parametrize("skill", LINEAR_SKILLS)
     def test_linear_skill_references_workflow(self, skill: str) -> None:
@@ -102,12 +104,62 @@ class TestNativeRuntimeReference:
         )
 
     @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
-    def test_adversarial_skill_references_team(self, skill: str) -> None:
+    def test_adversarial_skill_references_agent_teams_mechanism(self, skill: str) -> None:
+        """Adversarial SKILL.md must describe the REAL Agent Teams mechanism:
+        - mentions CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS (the gate env var)
+        - mentions teammates OR subagents as the dispatch mechanism
+        - references registered agent types (developer, quality-reviewer, architect)
+        - has a fallback path for when Agent Teams is disabled
+        """
         skill_md = SKILLS / skill / "SKILL.md"
         assert skill_md.exists(), f"SKILL.md missing for {skill}"
         text = skill_md.read_text(encoding="utf-8")
-        assert re.search(r"team\.md|Agent Team|Agent Teams", text), (
-            f"{skill}/SKILL.md must reference 'team.md' or 'Agent Team(s)'"
+
+        # Must mention the Agent Teams gate env var
+        assert re.search(r"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", text), (
+            f"{skill}/SKILL.md must reference 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS' "
+            "(the gate env var for Agent Teams)"
+        )
+
+        # Must mention teammates or subagents as dispatch mechanism
+        assert re.search(r"teammate|subagent|Agent-tool", text, re.IGNORECASE), (
+            f"{skill}/SKILL.md must describe the dispatch mechanism "
+            "(teammates when teams enabled, Agent-tool subagents as fallback)"
+        )
+
+        # Must reference at least one registered agent type
+        assert re.search(r"developer|quality-reviewer|architect", text), (
+            f"{skill}/SKILL.md must reference registered agent types "
+            "(developer, quality-reviewer, or architect)"
+        )
+
+        # Must describe a fallback path (Agent Teams disabled)
+        assert re.search(r"disabled|default|unset|fallback", text, re.IGNORECASE), (
+            f"{skill}/SKILL.md must describe the fallback path when "
+            "Agent Teams is disabled"
+        )
+
+    @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
+    def test_adversarial_skill_no_broken_constructs(self, skill: str) -> None:
+        """Adversarial SKILL.md must NOT reference deleted/non-existent constructs:
+        - no team.md (deleted; never a Claude Code construct)
+        - no workflow.mjs (adversarial skills have no workflow.mjs)
+        - no python --step CLI (deleted runtime)
+        """
+        skill_md = SKILLS / skill / "SKILL.md"
+        assert skill_md.exists(), f"SKILL.md missing for {skill}"
+        text = skill_md.read_text(encoding="utf-8")
+
+        assert not re.search(r"team\.md", text), (
+            f"{skill}/SKILL.md must not reference 'team.md' — that construct "
+            "was never part of Claude Code; the lead spawns teammates in natural language"
+        )
+        assert not re.search(r"workflow\.mjs", text), (
+            f"{skill}/SKILL.md must not reference 'workflow.mjs' — adversarial "
+            "skills use Agent Teams / Agent-tool subagents, not the Workflow tool"
+        )
+        assert not re.search(r"python3\s+-m\s+skills\.", text), (
+            f"{skill}/SKILL.md must not reference the deleted python --step CLI"
         )
 
 

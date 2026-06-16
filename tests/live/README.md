@@ -416,11 +416,25 @@ proving `bridge_workflow_run` reads the real run-state and emits events correctl
 
 ---
 
-## S5 (Optional) — Agent Teams Enabled
+## S5 (Optional) — Agent Teams Enabled Path
 
 **Goal:** When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set, validate that
-team.md skills fire TeammateIdle payloads and that `~/.claude/teams` appears
-(and may be populated) but is not written to by the substrate.
+adversarial skills (`/decision-critic`, `/problem-analysis`) spawn teammates,
+fire TeammateIdle payloads, and that `~/.claude/teams` appears (populated by the
+runtime, NOT by the substrate). Confirm that nothing is written under
+`~/.claude/teams` or `~/.claude/tasks` by the substrate itself.
+
+**How adversarial skills work (real mechanism):**
+- The skills run from `skills/<name>/SKILL.md`, NOT a `team.md` file (there is no
+  such Claude Code construct).
+- When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`: the lead (main session) spawns
+  **teammates** in natural language — e.g. "Spawn a teammate using the
+  `quality-reviewer` agent type as *verifier* …". Workers are registered agent
+  types: `developer`, `quality-reviewer`.
+- When the env var is unset (default): the lead spawns **Agent-tool subagents**
+  (`Agent(subagent_type=...)`) instead. Same durable events, same output.
+- Run durable events are captured under `~/.claude/skill-runs/` via M-003 hooks;
+  check `~/.claude/skill-runs/<run-id>/events.jsonl` after a run.
 
 **Prerequisite:** This requires enabling the experimental flag, which is off by
 default. Review the implications before enabling it in your environment.
@@ -442,7 +456,7 @@ Or add to `~/.claude/settings.json`:
 }
 ```
 
-**Step 2 — Run a team.md skill and capture TeammateIdle payloads.**
+**Step 2 — Run an adversarial skill and capture TeammateIdle payloads.**
 
 With debug hooks installed (from S1), run:
 
@@ -450,11 +464,28 @@ With debug hooks installed (from S1), run:
 /decision-critic
 ```
 
-After the run, check for TeammateIdle captures:
+or, for the hypothesis-debate case (N investigator teammates in parallel):
+
+```
+/problem-analysis
+```
+
+After the run, check for TeammateIdle captures and skill-run events:
 
 ```bash
 ls ~/.claude/skill-runs-debug/payloads-TeammateIdle.jsonl
 python3 -c "import json; [print(json.dumps(json.loads(l)['payload'], indent=2)) for l in open('$HOME/.claude/skill-runs-debug/payloads-TeammateIdle.jsonl').readlines()[:2]]"
+
+# Also check the durable event log:
+ls ~/.claude/skill-runs/
+python3 -c "
+import json
+from pathlib import Path
+runs = sorted(Path.home().glob('.claude/skill-runs/*/events.jsonl'))
+if runs:
+    for line in runs[-1].read_text().splitlines()[-5:]:
+        print(json.loads(line).get('type'), json.loads(line).get('payload', {}).get('task_id', ''))
+"
 ```
 
 **Step 3 — Check that `~/.claude/teams` was created by the runtime (not the substrate).**
@@ -464,13 +495,14 @@ python3 tests/live/assert/assert_no_runtime_dir_writes.py --quick
 # Shows current contents of ~/.claude/teams (should exist now) and ~/.claude/tasks
 ```
 
-Take a before/after snapshot around a team run to confirm the substrate
-does not write to `~/.claude/teams`:
+Take a before/after snapshot around a run to confirm the substrate does not write
+to `~/.claude/teams`:
 
 ```bash
 python3 tests/live/assert/assert_no_runtime_dir_writes.py --snapshot before
-# ... run /decision-critic ...
+# ... run /decision-critic with CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 ...
 python3 tests/live/assert/assert_no_runtime_dir_writes.py --check
+# Expected: PASS — no new writes to ~/.claude/teams or ~/.claude/tasks
 ```
 
 **Step 4 — Check TeammateIdle payload fields.**

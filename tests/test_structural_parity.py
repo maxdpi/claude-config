@@ -28,9 +28,11 @@ What does NOT pass here (marked xfail/skip pointing to the live kit):
     - QR loop behaviour — requires live LLM responses.
 
 Adversarial skills (decision-critic, deepthink, problem-analysis):
-    - No workflow.mjs; they use team.md + Agent Teams.
-    - We verify team.md exists, declares a lead + teammates, and carries
-      adversarial domain content in the BODY (DL-023).
+    - No workflow.mjs; they use SKILL.md + the lead spawning Agent Teams teammates
+      (when CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1) or Agent-tool subagents (default).
+    - There is no team.md construct — that was never part of Claude Code.
+    - We verify SKILL.md exists, declares a lead + worker roles (registered agent
+      types), and carries adversarial domain content in its body.
     - Behavioural parity is a live-kit concern; documented explicitly as xfail.
 """
 from __future__ import annotations
@@ -139,8 +141,8 @@ def _mjs_path(skill: str) -> Path:
     return _SKILLS_DIR / skill / "workflow.mjs"
 
 
-def _team_md_path(skill: str) -> Path:
-    return _SKILLS_DIR / skill / "team.md"
+def _skill_md_path(skill: str) -> Path:
+    return _SKILLS_DIR / skill / "SKILL.md"
 
 
 # ---------------------------------------------------------------------------
@@ -260,63 +262,83 @@ class TestLinearSkillParity:
 class TestAdversarialSkillParity:
     """Structural parity for decision-critic, deepthink, problem-analysis.
 
-    These use team.md + Agent Teams rather than workflow.mjs.
-    We verify the team.md structure (lead + teammates) and that the adversarial
-    domain content is embedded in the body (DL-023).
+    These use SKILL.md + the lead spawning Agent Teams teammates (when
+    CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1) or Agent-tool subagents (default).
+    There is no team.md construct — that was never part of Claude Code.
+    We verify SKILL.md declares a lead + worker roles (registered agent types)
+    and carries the adversarial domain content in its body.
 
     Behavioural parity is explicitly out of scope for this static layer.
     """
 
     @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
-    def test_team_md_exists(self, skill: str):
-        """team.md must exist for every adversarial skill."""
-        path = _team_md_path(skill)
+    def test_skill_md_exists(self, skill: str):
+        """SKILL.md must exist for every adversarial skill."""
+        path = _skill_md_path(skill)
         assert path.exists(), (
-            f"team.md missing for adversarial skill '{skill}' at {path}. "
+            f"SKILL.md missing for adversarial skill '{skill}' at {path}. "
             "Port may be incomplete."
         )
 
     @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
-    def test_team_md_declares_lead(self, skill: str):
-        """team.md must declare a Lead agent."""
-        path = _team_md_path(skill)
+    def test_skill_md_declares_lead(self, skill: str):
+        """SKILL.md must declare a Lead role (the main session is the lead)."""
+        path = _skill_md_path(skill)
         if not path.exists():
-            pytest.skip(f"team.md missing for '{skill}'")
+            pytest.skip(f"SKILL.md missing for '{skill}'")
         content = path.read_text(encoding="utf-8")
-        # Check for "Lead:" or "**Lead:**" pattern (markdown bold or plain)
-        assert re.search(r'\*{0,2}Lead\*{0,2}\s*:', content, re.IGNORECASE), (
-            f"'{skill}' team.md does not declare a Lead agent. "
-            "The adversarial team requires a lead orchestrator."
+        # Check for "lead" in context of role description
+        assert re.search(r'\blead\b', content, re.IGNORECASE), (
+            f"'{skill}' SKILL.md does not declare a lead role. "
+            "The adversarial skill requires a lead orchestrator (the main session)."
         )
 
     @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
-    def test_team_md_declares_teammates(self, skill: str):
-        """team.md must declare at least one Teammate."""
-        path = _team_md_path(skill)
+    def test_skill_md_declares_worker_roles(self, skill: str):
+        """SKILL.md must declare worker roles as registered agent types."""
+        path = _skill_md_path(skill)
         if not path.exists():
-            pytest.skip(f"team.md missing for '{skill}'")
+            pytest.skip(f"SKILL.md missing for '{skill}'")
         content = path.read_text(encoding="utf-8")
-        # Check for "Teammates:" or "**Teammates:**" or teammate yaml block
-        has_teammates_heading = re.search(
-            r'\*{0,2}Teammates?\*{0,2}\s*:', content, re.IGNORECASE
+        # Must reference registered agent types as workers
+        has_registered_type = bool(
+            re.search(r'developer|quality-reviewer|architect', content)
         )
-        has_teammate_yaml = re.search(r'- name:\s*\w+', content)
-        assert has_teammates_heading or has_teammate_yaml, (
-            f"'{skill}' team.md does not declare any Teammates. "
-            "Adversarial skills require at least one teammate for independent critique."
+        assert has_registered_type, (
+            f"'{skill}' SKILL.md does not reference registered agent types as workers. "
+            "Adversarial skills must spawn workers using registered subagent types "
+            "(developer, quality-reviewer, architect)."
         )
 
     @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
-    def test_team_md_adversarial_content_in_body(self, skill: str):
-        """Adversarial domain content must live in the BODY of team.md (DL-023).
+    def test_skill_md_describes_agent_teams_and_fallback(self, skill: str):
+        """SKILL.md must describe both paths: Agent Teams and subagent fallback."""
+        path = _skill_md_path(skill)
+        if not path.exists():
+            pytest.skip(f"SKILL.md missing for '{skill}'")
+        content = path.read_text(encoding="utf-8")
 
-        The frontmatter (---...---) carries only metadata.  The methodology steps
-        must appear in the markdown body so they are applied to teammates on the
-        Agent Teams path.
+        # Must mention the Agent Teams gate env var
+        assert re.search(r"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", content), (
+            f"'{skill}' SKILL.md must reference 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS' "
+            "(the gate env var for Agent Teams)"
+        )
+
+        # Must mention subagent fallback
+        assert re.search(r"subagent|Agent-tool", content, re.IGNORECASE), (
+            f"'{skill}' SKILL.md must describe the Agent-tool subagent fallback path"
+        )
+
+    @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
+    def test_skill_md_adversarial_content_in_body(self, skill: str):
+        """Adversarial domain content must live in the body of SKILL.md.
+
+        The methodology steps must appear in the markdown body so the lead can
+        follow them and pass them into worker spawn prompts.
         """
-        path = _team_md_path(skill)
+        path = _skill_md_path(skill)
         if not path.exists():
-            pytest.skip(f"team.md missing for '{skill}'")
+            pytest.skip(f"SKILL.md missing for '{skill}'")
         content = path.read_text(encoding="utf-8")
 
         # Strip frontmatter (between first and second ---)
@@ -326,31 +348,47 @@ class TestAdversarialSkillParity:
             if end != -1:
                 body = content[end + 3:]
 
-        # The body must contain step references (Step N: or #### Step)
-        has_steps = bool(re.search(r'Step\s+\d+[:\.]', body, re.IGNORECASE))
+        # The body must contain step references (Step N: or ### Step)
+        has_steps = bool(re.search(r'Step\s+\d+[:\.]|###\s+Step', body, re.IGNORECASE))
         # OR it must contain methodology keywords
         has_methodology = bool(
             re.search(
-                r'(Adversarial Domain Content|methodology|7-Step|14-Step|5-Step|'
-                r'Verify|Contrarian|Root Cause|Formulate)',
+                r'(methodology|7-Step|14-Step|5-Step|'
+                r'Verify|Contrarian|Root Cause|Formulate|Hypothesize)',
                 body,
                 re.IGNORECASE,
             )
         )
         assert has_steps or has_methodology, (
-            f"'{skill}' team.md body appears to lack adversarial domain content. "
-            "Per DL-023, the methodology must be embedded in the body so it reaches "
-            "teammates on the Agent Teams path."
+            f"'{skill}' SKILL.md body appears to lack adversarial domain content. "
+            "The methodology must be embedded in the body so the lead can follow it "
+            "and pass step instructions into worker spawn prompts."
+        )
+
+    @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
+    def test_skill_md_no_broken_constructs(self, skill: str):
+        """SKILL.md must not reference deleted/non-existent constructs."""
+        path = _skill_md_path(skill)
+        if not path.exists():
+            pytest.skip(f"SKILL.md missing for '{skill}'")
+        content = path.read_text(encoding="utf-8")
+
+        assert not re.search(r"\bteam\.md\b", content), (
+            f"'{skill}' SKILL.md must not reference 'team.md' — that construct "
+            "was never part of Claude Code"
+        )
+        assert not re.search(r"python3\s+-m\s+skills\.", content), (
+            f"'{skill}' SKILL.md must not reference the deleted python --step CLI"
         )
 
     @pytest.mark.parametrize("skill", ADVERSARIAL_SKILLS)
     @pytest.mark.xfail(
         reason=(
             "Behavioural output parity for adversarial skills requires both the "
-            "Python orchestrator and the Agent Teams runtime to be live-executable "
-            "against the same input.  This is a live-kit concern, not a static "
-            "structural check.  See: tests/test_adversarial_skill_parity.py for "
-            "the live behavioural test hooks."
+            "Python orchestrator and the Agent Teams / subagent runtime to be "
+            "live-executable against the same input.  This is a live-kit concern, "
+            "not a static structural check.  See: tests/test_adversarial_skill_parity.py "
+            "for the live behavioural test hooks."
         ),
         strict=False,
     )
@@ -359,8 +397,8 @@ class TestAdversarialSkillParity:
 
         This test is always xfail to document the gap explicitly.
         It will remain xfail until the live behavioural kit can drive both
-        the Python orchestrator (via docker/archive) and the Agent Teams runtime
-        against the same input and compare structured verdict outputs.
+        the Python orchestrator (via docker/archive) and the Agent Teams /
+        subagent runtime against the same input and compare structured outputs.
         """
         raise NotImplementedError(
             "Live behavioural parity check not implemented in the static layer."
@@ -431,8 +469,8 @@ def print_structural_parity_table() -> None:
 
         # New phase count
         if is_adversarial:
-            team_path = _team_md_path(skill)
-            new_phases = "team.md" if team_path.exists() else "MISSING"
+            skill_md_path = _skill_md_path(skill)
+            new_phases = "SKILL.md" if skill_md_path.exists() else "MISSING"
         else:
             mjs_path = _mjs_path(skill)
             if mjs_path.exists():

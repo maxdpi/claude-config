@@ -192,7 +192,7 @@ _SKILL_PYTHON_MAP: dict[str, tuple[str, str]] = {
     "planner":           ("planner",           "orchestrator/planner.py"),
     "prompt-engineer":   ("prompt_engineer",   "optimize.py"),
     "refactor":          ("refactor",          "refactor.py"),
-    # adversarial skills (no workflow.mjs — team.md based)
+    # adversarial skills (no workflow.mjs — SKILL.md lead+worker orchestration)
     "decision-critic":   ("decision_critic",   "decision_critic.py"),
     "deepthink":         ("deepthink",         "think.py"),
     "problem-analysis":  ("problem_analysis",  "analyze.py"),
