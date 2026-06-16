@@ -23,6 +23,7 @@
 !README.md
 !LICENSE
 !.gitignore
+!settings.json
 
 # Always ignore these, even in tracked directories
 .DS_Store
