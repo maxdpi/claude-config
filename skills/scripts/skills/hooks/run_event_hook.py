@@ -47,7 +47,7 @@ from skills.lib.workflow.persistence.hook_adapter import (
     normalize_hook_event,
     _PAYLOAD_AGENT_ID,
     _PAYLOAD_SESSION_ID,
-    _PAYLOAD_TRANSCRIPT_PATH,
+    _PAYLOAD_AGENT_TRANSCRIPT_PATH,
 )
 from skills.lib.workflow.persistence.eventlog import append_event
 from skills.lib.workflow.persistence.registry import list_runs, find_run
@@ -128,8 +128,11 @@ def _copy_native_transcript(
 ) -> None:
     """Copy the native transcript to transcript.jsonl atomically.
 
-    PRIMARY path: ``transcript_path`` field in the SubagentStop payload.
-    DERIVED path: resolved from sessionId + agentId via the A4 probe helper.
+    PRIMARY path: ``agent_transcript_path`` field in the SubagentStop payload --
+    the SUBAGENT's own transcript (DL-016). NOTE: the plain ``transcript_path``
+    field is the PARENT session transcript and must NOT be copied (confirmed via
+    the S1 live-capture probe, R-008).
+    DERIVED path: resolved from session_id + agent_id via the A4 probe helper.
     If neither resolves, a WARNING is logged but the hook exits non-fatally.
 
     The copy is atomic (tmp + os.rename) so concurrent readers see either
@@ -137,7 +140,8 @@ def _copy_native_transcript(
     """
     native_agent_id: str | None = hook_payload.get(_PAYLOAD_AGENT_ID) or None
     native_session_id: str | None = hook_payload.get(_PAYLOAD_SESSION_ID) or None
-    transcript_path_raw: str | None = hook_payload.get(_PAYLOAD_TRANSCRIPT_PATH)
+    # Subagent's own transcript (NOT the parent session transcript).
+    transcript_path_raw: str | None = hook_payload.get(_PAYLOAD_AGENT_TRANSCRIPT_PATH)
 
     src: Path | None = None
 
@@ -147,7 +151,7 @@ def _copy_native_transcript(
             src = candidate
         else:
             log.warning(
-                "run_event_hook: SubagentStop transcript_path %r does not exist; "
+                "run_event_hook: SubagentStop agent_transcript_path %r does not exist; "
                 "will try deriving from session_id + agent_id",
                 transcript_path_raw,
             )

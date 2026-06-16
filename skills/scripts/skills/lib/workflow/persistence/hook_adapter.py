@@ -55,19 +55,27 @@ log = logging.getLogger(__name__)
 # runtime uses different names.
 # ---------------------------------------------------------------------------
 
-# Fields the SubagentStart payload is assumed to carry:
-#   agentId        — native subagent identifier (the correlation join key)
-#   sessionId      — native session identifier
-#   parentAgentId  — native agentId of the spawning parent (may be absent)
-#   depth          — nesting depth (may be absent, default 0)
-_PAYLOAD_AGENT_ID = "agentId"           # confirmed in A4 transcript records
-_PAYLOAD_SESSION_ID = "sessionId"       # confirmed in A4 transcript records
-_PAYLOAD_PARENT_AGENT_ID = "parentAgentId"  # assumed; absent = top-level
-_PAYLOAD_DEPTH = "depth"                    # assumed; absent = 0
+# Fields the SubagentStart/SubagentStop payloads carry. CONFIRMED by the S1
+# live-capture probe (R-008, 2026-06-16): Claude Code uses snake_case, NOT the
+# camelCase that the A4 *transcript records* use. Change these constants -- not
+# any other code -- if a future runtime uses different names.
+#   agent_id       — native subagent identifier (the correlation join key);
+#                    matches the agent-<id>.jsonl filename (A4 join holds)
+#   session_id     — native session identifier
+#   parentAgentId  — NOT emitted by current CC (confirmed absent); absent = top-level
+#   depth          — NOT emitted by current CC (confirmed absent); absent = 0
+_PAYLOAD_AGENT_ID = "agent_id"          # CONFIRMED via S1 live capture (was "agentId")
+_PAYLOAD_SESSION_ID = "session_id"      # CONFIRMED via S1 live capture (was "sessionId")
+_PAYLOAD_PARENT_AGENT_ID = "parentAgentId"  # confirmed absent in current CC; kept for forward-compat
+_PAYLOAD_DEPTH = "depth"                    # confirmed absent in current CC; default 0
 
-# SubagentStop is assumed to carry these fields in addition to the above:
-#   transcript_path  — filesystem path to the native transcript (may be absent)
-_PAYLOAD_TRANSCRIPT_PATH = "transcript_path"  # assumed; absent triggers derive path
+# SubagentStop carries TWO transcript paths (confirmed via S1):
+#   transcript_path        — the PARENT SESSION transcript (NOT the subagent's)
+#   agent_transcript_path  — the SUBAGENT's own transcript at
+#                            .../subagents/agent-<id>.jsonl  <-- copy-on-stop target (DL-016)
+# Copy-on-stop MUST use agent_transcript_path; transcript_path points at the wrong file.
+_PAYLOAD_AGENT_TRANSCRIPT_PATH = "agent_transcript_path"  # CONFIRMED via S1; subagent transcript
+_PAYLOAD_TRANSCRIPT_PATH = "transcript_path"  # parent session transcript; NOT used for copy-on-stop
 
 # TaskCreated / TaskCompleted assumed field names:
 _PAYLOAD_TASK_ID = "task_id"
@@ -187,12 +195,15 @@ def _normalize_subagent_start(raw: dict[str, Any], run_id: str) -> dict[str, Any
 def _normalize_subagent_stop(raw: dict[str, Any], run_id: str) -> dict[str, Any]:
     """SubagentStop -> EVENT_SUBAGENT_COMPLETED.
 
-    Preserves transcript_path (may be None/absent — copy-on-stop logic in
-    run_event_hook derives the path from session_id+agent_id when absent).
+    Carries the SUBAGENT's own transcript path (``agent_transcript_path``) for
+    copy-on-stop (DL-016). The plain ``transcript_path`` field is the PARENT
+    session transcript and must NOT be used as the copy source. When the
+    subagent path is absent, copy-on-stop logic in run_event_hook derives it
+    from session_id+agent_id.
     """
     native_agent_id: str | None = raw.get(_PAYLOAD_AGENT_ID) or None
     native_session_id: str | None = raw.get(_PAYLOAD_SESSION_ID) or None
-    transcript_path: str | None = raw.get(_PAYLOAD_TRANSCRIPT_PATH) or None
+    transcript_path: str | None = raw.get(_PAYLOAD_AGENT_TRANSCRIPT_PATH) or None
 
     return event_schema(
         type=EVENT_SUBAGENT_COMPLETED,

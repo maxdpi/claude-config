@@ -84,27 +84,33 @@ _DEBUG_DIR: Path = Path.home() / ".claude" / "skill-runs-debug"
 # ---------------------------------------------------------------------------
 
 ASSUMED_FIELDS_START: dict[str, str] = {
-    "agentId": _ha._PAYLOAD_AGENT_ID,
-    "sessionId": _ha._PAYLOAD_SESSION_ID,
-    "parentAgentId": _ha._PAYLOAD_PARENT_AGENT_ID,
-    "depth": _ha._PAYLOAD_DEPTH,
+    "AGENT_ID": _ha._PAYLOAD_AGENT_ID,
+    "SESSION_ID": _ha._PAYLOAD_SESSION_ID,
+    "PARENT_AGENT_ID": _ha._PAYLOAD_PARENT_AGENT_ID,
+    "DEPTH": _ha._PAYLOAD_DEPTH,
 }
 
 ASSUMED_FIELDS_STOP: dict[str, str] = {
-    "agentId": _ha._PAYLOAD_AGENT_ID,
-    "sessionId": _ha._PAYLOAD_SESSION_ID,
-    "transcript_path": _ha._PAYLOAD_TRANSCRIPT_PATH,
+    "AGENT_ID": _ha._PAYLOAD_AGENT_ID,
+    "SESSION_ID": _ha._PAYLOAD_SESSION_ID,
+    # The SUBAGENT's own transcript — the copy-on-stop source (DL-016).
+    "AGENT_TRANSCRIPT_PATH": _ha._PAYLOAD_AGENT_TRANSCRIPT_PATH,
 }
+
+# Labels whose absence is EXPECTED/acceptable (the code degrades gracefully):
+# parent/depth aren't emitted by current CC (absent = top-level / depth 0).
+_OPTIONAL_LABELS: set[str] = {"PARENT_AGENT_ID", "DEPTH"}
 
 # ---------------------------------------------------------------------------
 # Fuzzy-match helpers
 # ---------------------------------------------------------------------------
 
 _FUZZY_ALIASES: dict[str, list[str]] = {
-    "agentId": ["agent_id", "agent-id", "agentid", "AgentId", "AGENT_ID"],
-    "sessionId": ["session_id", "session-id", "sessionid", "SessionId", "SESSION_ID"],
+    "agent_id": ["agentId", "agent-id", "agentid", "AgentId", "AGENT_ID"],
+    "session_id": ["sessionId", "session-id", "sessionid", "SessionId", "SESSION_ID"],
     "parentAgentId": ["parent_agent_id", "parentagentid", "ParentAgentId", "parent_id"],
     "depth": ["nesting_depth", "nestingDepth", "level"],
+    "agent_transcript_path": ["agentTranscriptPath", "subagent_transcript_path"],
     "transcript_path": ["transcriptPath", "transcript-path", "TranscriptPath"],
 }
 
@@ -177,14 +183,21 @@ def _check_fields(
             if alt:
                 alt_values = [p.get(alt) for p in payloads if alt in p]
                 results.append(
-                    f"  FAIL  {event_name}.{assumed_name} (assumed _PAYLOAD_{label.upper()}={assumed_name!r}):"
-                    f" NOT FOUND under assumed name."
+                    f"  FAIL  {event_name}.{assumed_name} (constant _PAYLOAD_{label}={assumed_name!r}):"
+                    f" NOT FOUND under that name."
                     f" Found under '{alt}' with values {alt_values[:3]}."
-                    f" => UPDATE hook_adapter._PAYLOAD_{label.upper()} = {alt!r}"
+                    f" => UPDATE hook_adapter._PAYLOAD_{label} = {alt!r}"
+                )
+            elif label in _OPTIONAL_LABELS:
+                # Optional field genuinely absent — expected, code degrades gracefully.
+                results.append(
+                    f"  WARN  {event_name}.{assumed_name} (constant _PAYLOAD_{label}={assumed_name!r}):"
+                    f" absent (expected — current CC does not emit it; treated as"
+                    f" top-level / depth 0)."
                 )
             else:
                 results.append(
-                    f"  FAIL  {event_name}.{assumed_name} (assumed _PAYLOAD_{label.upper()}={assumed_name!r}):"
+                    f"  FAIL  {event_name}.{assumed_name} (constant _PAYLOAD_{label}={assumed_name!r}):"
                     f" NOT FOUND under any recognizable name."
                     f" All keys in payload: {sorted(all_keys)}"
                 )
@@ -208,49 +221,62 @@ def _check_fields(
 
 
 def _check_transcript_path_on_stop(payloads_stop: list[dict]) -> list[str]:
-    """Specifically assert whether SubagentStop carries transcript_path (DL-016)."""
+    """Assert SubagentStop carries the SUBAGENT's transcript for copy-on-stop (DL-016).
+
+    NOTE: there are TWO transcript fields. `transcript_path` is the PARENT session
+    transcript (wrong file to copy); `agent_transcript_path` is the subagent's own
+    transcript at .../subagents/agent-<id>.jsonl — the correct copy-on-stop source.
+    """
     results: list[str] = []
     if not payloads_stop:
         results.append(
-            "  SKIP  SubagentStop.transcript_path: no Stop payloads captured."
+            "  SKIP  SubagentStop.agent_transcript_path: no Stop payloads captured."
             " (DL-016 copy-on-stop primary path — unverified)"
         )
         return results
 
-    tp_name = _ha._PAYLOAD_TRANSCRIPT_PATH  # "transcript_path"
+    # Flag the common confusion if the parent transcript is present.
+    parent_name = _ha._PAYLOAD_TRANSCRIPT_PATH  # "transcript_path" = parent session
+    if any(parent_name in p for p in payloads_stop):
+        results.append(
+            f"  INFO  SubagentStop.transcript_path is the PARENT session transcript"
+            f" (NOT copied). copy-on-stop uses agent_transcript_path instead."
+        )
+
+    tp_name = _ha._PAYLOAD_AGENT_TRANSCRIPT_PATH  # "agent_transcript_path" = subagent
     payloads_with_tp = [p for p in payloads_stop if tp_name in p and p[tp_name]]
     payloads_null_tp = [p for p in payloads_stop if tp_name in p and not p[tp_name]]
     payloads_absent_tp = [p for p in payloads_stop if tp_name not in p]
 
     if payloads_with_tp:
         results.append(
-            f"  PASS  SubagentStop.transcript_path: PRESENT AND NON-NULL in"
+            f"  PASS  SubagentStop.agent_transcript_path: PRESENT AND NON-NULL in"
             f" {len(payloads_with_tp)}/{len(payloads_stop)} payloads."
             f" Sample: {payloads_with_tp[0][tp_name]!r}"
             f" => DL-016 PRIMARY PATH IS DELIVERED BY RUNTIME. No derive-path fallback needed."
         )
     elif payloads_null_tp:
         results.append(
-            f"  WARN  SubagentStop.transcript_path: field present but value is"
+            f"  WARN  SubagentStop.agent_transcript_path: field present but value is"
             f" None/empty in {len(payloads_null_tp)}/{len(payloads_stop)} payloads."
             f" => copy-on-stop will fall back to derive-path (DL-016 fallback)."
         )
     else:
-        # Check camelCase alias
-        alt = "transcriptPath"
+        # Check camelCase alias for the subagent transcript field
+        alt = "agentTranscriptPath"
         if any(alt in p for p in payloads_stop):
             alt_vals = [p[alt] for p in payloads_stop if alt in p]
             results.append(
-                f"  FAIL  SubagentStop.transcript_path: field ABSENT under 'transcript_path'."
+                f"  FAIL  SubagentStop.agent_transcript_path: field ABSENT under that name."
                 f" Found under '{alt}' with values {alt_vals[:2]}."
-                f" => UPDATE hook_adapter._PAYLOAD_TRANSCRIPT_PATH = {alt!r}"
+                f" => UPDATE hook_adapter._PAYLOAD_AGENT_TRANSCRIPT_PATH = {alt!r}"
             )
         else:
             results.append(
-                f"  WARN  SubagentStop.transcript_path: field ABSENT from all"
+                f"  WARN  SubagentStop.agent_transcript_path: field ABSENT from all"
                 f" {len(payloads_absent_tp)} captured Stop payloads."
-                f" => Runtime does NOT deliver transcript_path in SubagentStop."
-                f" copy-on-stop will always derive the path from sessionId+agentId (DL-016 fallback)."
+                f" => Runtime does NOT deliver the subagent transcript path in SubagentStop."
+                f" copy-on-stop will derive the path from session_id+agent_id (DL-016 fallback)."
             )
 
     return results
