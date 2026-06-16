@@ -1,8 +1,8 @@
 # skills/
 
-Script-based agent workflows with shared orchestration framework.
+Agent workflows implemented on two native runtimes: the Workflow tool (`workflow.mjs`) for linear skills and Agent Teams (`team.md`) for adversarial skills.
 
-## MANDATORY: Read Before Modifying
+## MANDATORY: Read Before Modifying Python Files
 
 **STOP. Before editing ANY Python file in `skills/scripts/`, you MUST read `README.md`.**
 
@@ -28,7 +28,7 @@ Failure to follow these patterns creates technical debt and inconsistency across
 
 | Directory             | What                                      | When to read                             |
 | --------------------- | ----------------------------------------- | ---------------------------------------- |
-| `scripts/`            | Python package root for all skill code    | Executing skills, debugging behavior     |
+| `scripts/`            | Python package root for all skill code    | Executing non-ported skills, debugging   |
 | `planner/`            | Planning and execution workflows          | Creating implementation plans            |
 | `refactor/`           | Refactoring analysis across dimensions    | Technical debt review, code quality      |
 | `problem-analysis/`   | Structured problem decomposition          | Understanding complex issues             |
@@ -42,12 +42,32 @@ Failure to follow these patterns creates technical debt and inconsistency across
 | `arxiv-to-md/`        | arXiv paper to markdown conversion        | Converting papers for LLM consumption    |
 | `cc-history/`         | Claude Code conversation history analysis | Querying past conversations, token usage |
 
-## Script Invocation
+## Native Runtimes (ported skills)
 
-All Python skill scripts are invoked as modules from `scripts/`:
+Ten skills have been ported from the Python `--step` CLI to native runtimes (M-006/M-006.5/M-007):
 
-<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.<skill_name>.<module> --step 1" />
+**Linear skills — Workflow tool** (`skills/<name>/workflow.mjs`):
 
-Example:
+| Skill               | Entry point                            |
+| ------------------- | -------------------------------------- |
+| codebase-analysis   | `skills/codebase-analysis/workflow.mjs` |
+| refactor            | `skills/refactor/workflow.mjs`          |
+| planner             | `skills/planner/workflow.mjs`           |
+| arxiv-to-md         | `skills/arxiv-to-md/workflow.mjs`       |
+| incoherence         | `skills/incoherence/workflow.mjs`       |
+| prompt-engineer     | `skills/prompt-engineer/workflow.mjs`   |
+| leon-writing-style  | `skills/leon-writing-style/workflow.mjs`|
 
-<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.problem_analysis.analyze --step 1" />
+**Adversarial skills — Agent Teams** (`skills/<name>/team.md`), with Workflow+Agent-tool fallback when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset:
+
+| Skill            | Entry point                         |
+| ---------------- | ----------------------------------- |
+| decision-critic  | `skills/decision-critic/team.md`    |
+| deepthink        | `skills/deepthink/team.md`          |
+| problem-analysis | `skills/problem-analysis/team.md`   |
+
+Durable phase-boundary events are written under `skills/scripts/skills/lib/workflow/persistence/` on both paths.
+
+## Non-ported skills (Python CLI still active)
+
+`doc-sync` and `cc-history` still use the Python `--step` runtime. See each skill's `SKILL.md` for invocation.

@@ -9,6 +9,8 @@ Convert arXiv papers (TeX source) to clean markdown for LLM consumption.
 
 ## Invocation
 
-<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.arxiv_to_md.main --step 1" />
+Invoke the Workflow tool with the script at `skills/arxiv-to-md/workflow.mjs`. Pass the user's request (arXiv ID, URL, or folder path) as `args`.
 
-Do NOT explore or analyze first. Run the script and follow its output.
+The workflow handles both single-paper and batch-folder modes natively.
+
+Do NOT explore or analyze first. Invoke the workflow and follow its phases.

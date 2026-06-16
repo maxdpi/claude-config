@@ -1,6 +1,6 @@
 # prompt-engineer/
 
-Prompt optimization skill. IMMEDIATELY invoke the script -- do NOT explore or analyze first.
+Prompt optimization skill. IMMEDIATELY invoke the Workflow tool -- do NOT explore or analyze first.
 
 ## Files
 

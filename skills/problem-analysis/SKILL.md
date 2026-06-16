@@ -1,15 +1,22 @@
 ---
 name: problem-analysis
-description: Invoke IMMEDIATELY via python script when user requests problem analysis or root cause investigation. Do NOT explore first - the script orchestrates the investigation.
+description: Invoke IMMEDIATELY via Agent Teams (or Workflow tool fallback) when user requests problem analysis or root cause investigation. Do NOT explore first - the team orchestrates the investigation.
 ---
 
 # Problem Analysis
 
-Root cause identification skill. Identifies WHY a problem occurs, NOT how to fix
-it.
+Root cause identification skill. Identifies WHY a problem occurs, NOT how to fix it.
 
 ## Invocation
 
-<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.problem_analysis.analyze --step 1" />
+### Primary path (Agent Teams enabled)
 
-Do NOT explore or analyze first. Run the script and follow its output.
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is set, launch an Agent Team from `skills/problem-analysis/team.md`. Pass the problem description as the input.
+
+The team drives structured root cause investigation (lead + adversarial teammates).
+
+### Fallback path (Agent Teams unset)
+
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset, invoke the Workflow tool with `skills/problem-analysis/workflow.mjs` + Agent-tool subagents. The same durable phase-boundary events are emitted on both paths.
+
+Do NOT explore or analyze first. Launch the team (or workflow) and follow its output.

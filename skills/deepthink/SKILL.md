@@ -1,14 +1,22 @@
 ---
 name: deepthink
-description: Invoke IMMEDIATELY via python script when user requests structured reasoning for open-ended analytical questions. Do NOT explore first - the script orchestrates the thinking workflow.
+description: Invoke IMMEDIATELY via Agent Teams (or Workflow tool fallback) when user requests structured reasoning for open-ended analytical questions. Do NOT explore first - the team orchestrates the thinking workflow.
 ---
 
 # DeepThink
 
-When this skill activates, IMMEDIATELY invoke the script. The script IS the workflow.
+When this skill activates, IMMEDIATELY launch the Agent Team. The team IS the entry point.
 
-Invoke:
+## Invocation
 
-<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.deepthink.think --step 1" />
+### Primary path (Agent Teams enabled)
 
-Do NOT explore or analyze first. Run the script and follow its output.
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is set, launch an Agent Team from `skills/deepthink/team.md`. Pass the user's analytical question as the input.
+
+The team runs structured multi-perspective reasoning (lead + adversarial teammates).
+
+### Fallback path (Agent Teams unset)
+
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset, invoke the Workflow tool with `skills/deepthink/workflow.mjs` + Agent-tool subagents. The same durable phase-boundary events are emitted on both paths.
+
+Do NOT explore or analyze first. Launch the team (or workflow) and follow its output.

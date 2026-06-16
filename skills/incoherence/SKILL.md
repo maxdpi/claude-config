@@ -5,27 +5,20 @@ description: Detect and resolve incoherence in documentation, code, specs vs imp
 
 # Incoherence Detector
 
-When this skill activates, IMMEDIATELY invoke the script. The script IS the
-workflow.
+When this skill activates, IMMEDIATELY invoke the Workflow tool. The workflow IS the entry point.
 
 ## Invocation
 
-<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.incoherence.incoherence --step-number 1 --thoughts '<context>'" />
+Invoke the Workflow tool with the script at `skills/incoherence/workflow.mjs`. Pass the user's request (scope, context, or target files) as `args`.
 
-| Argument        | Required | Description                               |
-| --------------- | -------- | ----------------------------------------- |
-| `--step-number` | Yes      | Current step (starts at 1)                |
-| `--thoughts`    | Yes      | Accumulated state from all previous steps |
+The workflow drives all phases natively.
 
-Do NOT explore or detect first. Run the script and follow its output.
+Do NOT explore or detect first. Invoke the workflow and follow its phases.
 
 ## Workflow Phases
 
-1. **Detection (steps 1-12)**: Survey codebase, explore dimensions, verify
-   candidates
-2. **Resolution (steps 13-15)**: Present issues via AskUserQuestion, collect
-   user decisions
-3. **Application (steps 16-21)**: Apply resolutions, present final report
+1. **Detection**: Survey codebase, explore dimensions, verify candidates
+2. **Resolution**: Present issues via AskUserQuestion, collect user decisions
+3. **Application**: Apply resolutions, present final report
 
-Resolution is interactive - user answers structured questions inline. No manual
-file editing required.
+Resolution is interactive - user answers structured questions inline. No manual file editing required.

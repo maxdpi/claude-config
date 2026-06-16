@@ -1,6 +1,6 @@
 # problem-analysis/
 
-Root cause identification skill. IMMEDIATELY invoke the script -- do NOT explore first.
+Root cause identification skill. IMMEDIATELY invoke the Agent Team (or Workflow tool fallback) -- do NOT explore first.
 
 ## Files
 
@@ -8,5 +8,4 @@ Root cause identification skill. IMMEDIATELY invoke the script -- do NOT explore
 | ----------- | ------------------------------------- | -------------------------- |
 | `SKILL.md`  | Skill invocation, phases, principles  | Using this skill           |
 | `README.md` | Design rationale, invisible knowledge | Understanding why it works |
-
-Python code: `scripts/skills/problem_analysis/analyze.py`
+| `team.md`   | Agent Teams entry point               | Debugging behavior         |

@@ -1,20 +1,22 @@
 ---
 name: decision-critic
-description: Invoke IMMEDIATELY via python script to stress-test decisions and reasoning. Do NOT analyze first - the script orchestrates the critique workflow.
+description: Invoke IMMEDIATELY via Agent Teams (or Workflow tool fallback) to stress-test decisions and reasoning. Do NOT analyze first - the team orchestrates the critique workflow.
 ---
 
 # Decision Critic
 
-When this skill activates, IMMEDIATELY invoke the script. The script IS the
-workflow.
+When this skill activates, IMMEDIATELY launch the Agent Team. The team IS the entry point.
 
 ## Invocation
 
-<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.decision_critic.decision_critic --step 1 --decision '<decision text>'" />
+### Primary path (Agent Teams enabled)
 
-| Argument        | Required | Description                             |
-| --------------- | -------- | --------------------------------------- |
-| `--step`        | Yes      | Current step (1-7)                      |
-| `--decision`    | Step 1   | The decision statement being criticized |
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is set, launch an Agent Team from `skills/decision-critic/team.md`. Pass the decision statement to critique as the input.
 
-Do NOT analyze or critique first. Run the script and follow its output.
+The team runs the 7-step adversarial critique methodology (lead + adversarial teammates).
+
+### Fallback path (Agent Teams unset)
+
+When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset, invoke the Workflow tool with `skills/decision-critic/workflow.mjs` + Agent-tool subagents. The same durable phase-boundary events are emitted on both paths.
+
+Do NOT analyze or critique first. Launch the team (or workflow) and follow its output.
