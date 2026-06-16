@@ -31,7 +31,7 @@ Design invariants (C-004, C-005, DL-003, DL-004, DL-016)
 from __future__ import annotations
 
 from .atomic import write_atomic
-from .eventlog import append_event
+from .eventlog import append_event, read_events
 from .events import (
     EVENT_MILESTONE_STATUS,
     EVENT_PHASE_COMPLETED,
@@ -42,6 +42,9 @@ from .events import (
     EVENT_RUN_STARTED,
     EVENT_SUBAGENT_COMPLETED,
     EVENT_SUBAGENT_SPAWNED,
+    EVENT_TASK_CREATED,
+    EVENT_TASK_COMPLETED,
+    EVENT_TEAMMATE_IDLE,
     event_schema,
 )
 from .fold import empty_projection, fold
@@ -56,6 +59,9 @@ __all__ = [
     "event_schema",
     "EVENT_SUBAGENT_SPAWNED",
     "EVENT_SUBAGENT_COMPLETED",
+    "EVENT_TASK_CREATED",
+    "EVENT_TASK_COMPLETED",
+    "EVENT_TEAMMATE_IDLE",
     "EVENT_PHASE_STARTED",
     "EVENT_PHASE_COMPLETED",
     "EVENT_MILESTONE_STATUS",
@@ -71,6 +77,7 @@ __all__ = [
     "create_run_dir",
     # eventlog
     "append_event",
+    "read_events",
     # projection
     "replay",
     "verify_projection",

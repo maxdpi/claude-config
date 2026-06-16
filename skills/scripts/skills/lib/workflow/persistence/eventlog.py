@@ -83,6 +83,36 @@ def append_event(run_dir: RunDir, event: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Public read helper
+# ---------------------------------------------------------------------------
+
+
+def read_events(run_dir: "RunDir") -> list[dict]:
+    """Return all events from ``events.jsonl`` as a list of dicts.
+
+    Skips blank lines and malformed JSON so a single corrupted append does
+    not block inspection or replay.  Returns an empty list if the file is
+    absent.
+
+    Args:
+        run_dir: Handle returned by ``create_run_dir`` (or ``as_run_dir()``).
+    """
+    path: Path = run_dir.events_jsonl
+    if not path.exists():
+        return []
+    events: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+# ---------------------------------------------------------------------------
 # Internal helper (reused by projection.replay without the lock)
 # ---------------------------------------------------------------------------
 

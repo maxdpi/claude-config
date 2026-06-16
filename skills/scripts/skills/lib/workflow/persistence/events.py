@@ -32,6 +32,10 @@ EVENT_RUN_STARTED: str = "run_started"
 EVENT_RUN_COMPLETED: str = "run_completed"
 EVENT_RUN_FAILED: str = "run_failed"
 EVENT_RESUME_CURSOR: str = "resume_cursor"
+# Agent Teams mirroring (M-003 producers; fold tolerates these as pass-through).
+EVENT_TASK_CREATED: str = "task_created"
+EVENT_TASK_COMPLETED: str = "task_completed"
+EVENT_TEAMMATE_IDLE: str = "teammate_idle"
 
 # ---------------------------------------------------------------------------
 # Envelope builder
