@@ -247,8 +247,22 @@ def _normalize_task_completed(raw: dict[str, Any], run_id: str) -> dict[str, Any
 
 
 def _normalize_teammate_idle(raw: dict[str, Any], run_id: str) -> dict[str, Any]:
-    """TeammateIdle -> EVENT_TEAMMATE_IDLE."""
-    teammate_id = raw.get(_PAYLOAD_TEAMMATE_ID) or raw.get(_PAYLOAD_AGENT_ID)
+    """TeammateIdle -> EVENT_TEAMMATE_IDLE.
+
+    The teammate-identifier field name is UNVERIFIED (the live S5 run showed
+    `teammate_id` is absent — value null — and the payload was not preserved).
+    Extract tolerantly across candidate names; the production self-capture
+    (team-payloads.jsonl) records the real payload so the true name can be pinned.
+    """
+    teammate_id = (
+        raw.get(_PAYLOAD_TEAMMATE_ID)        # ASSUMED "teammate_id" (null in live run)
+        or raw.get(_PAYLOAD_AGENT_ID)        # "agent_id" (teammates are agents)
+        or raw.get("agentId")                # camelCase fallback
+        or raw.get("teammate")               # candidate
+        or raw.get("teammate_name")          # candidate
+        or raw.get("name")                   # candidate
+        or raw.get("member")                 # candidate
+    )
     return event_schema(
         type=EVENT_TEAMMATE_IDLE,
         run_id=run_id,

@@ -38,7 +38,11 @@ from .events import EVENT_RUN_STARTED, event_schema
 from .fold import empty_projection
 from .hook_adapter import normalize_hook_event
 from .registry import find_run
-from .rundir import RunDir, _resolve_base_dir
+from . import rundir
+from .rundir import RunDir
+# NOTE: resolve the base via the module (rundir._resolve_base_dir()) at CALL time,
+# not a bound import, so tests can monkeypatch rundir._resolve_base_dir and never
+# write into the real ~/.claude.
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +60,6 @@ _PAYLOAD_SESSION_ID_CAMEL = "sessionId"  # ASSUMED (unverified): camelCase fallb
 
 # Debug capture path: raw payloads written here before normalization so the
 # next real teammate run auto-records the actual field shapes.
-_DEBUG_PAYLOADS_PATH: Path = Path.home() / ".claude" / "skill-runs-debug" / "team-payloads.jsonl"
 
 # Hook event names that indicate an Agent Teams event (always try team capture).
 _TEAM_HOOK_TYPES: frozenset[str] = frozenset({
@@ -140,7 +143,7 @@ def ensure_team_run(
     Returns:
         A :class:`RunDir` handle for the team run.
     """
-    base = Path(skill_runs_base).expanduser() if skill_runs_base else _resolve_base_dir()
+    base = Path(skill_runs_base).expanduser() if skill_runs_base else rundir._resolve_base_dir()
     run_id = f"team-{team_name}"
 
     handle = find_run(run_id, base_dir=base)
@@ -183,8 +186,19 @@ def ensure_team_run(
 # ---------------------------------------------------------------------------
 
 
-def _capture_raw_payload(payload: dict[str, Any]) -> None:
-    """Best-effort append the raw payload to the debug capture file.
+def _debug_payloads_path(skill_runs_base: Path | str | None) -> Path:
+    """Resolve the debug-capture file, sandboxed to the active skill-runs base.
+
+    In production (base=None) this is ``~/.claude/skill-runs-debug/team-payloads.jsonl``;
+    under a test/tmp base it sits alongside that base so tests NEVER write into the
+    real ``~/.claude`` (mirrors how the quarantine log derives from the base).
+    """
+    base = Path(skill_runs_base).expanduser() if skill_runs_base else rundir._resolve_base_dir()
+    return base.parent / "skill-runs-debug" / "team-payloads.jsonl"
+
+
+def _capture_raw_payload(payload: dict[str, Any], skill_runs_base: Path | str | None = None) -> None:
+    """Best-effort append the raw payload to the (base-scoped) debug capture file.
 
     This records the actual TaskCreated/TaskCompleted/TeammateIdle/SubagentStart/
     SubagentStop payload shapes on the next real teammate run so that the ASSUMED
@@ -194,10 +208,15 @@ def _capture_raw_payload(payload: dict[str, Any]) -> None:
     Never raises — a write failure must never fail the hook.
     """
     import time
+    # Never write the production debug capture during tests (bulletproof isolation):
+    # the self-capture is a production-only field-verification aid.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
     try:
-        _DEBUG_PAYLOADS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        path = _debug_payloads_path(skill_runs_base)
+        path.parent.mkdir(parents=True, exist_ok=True)
         record = {"ts": time.time(), "payload": payload}
-        with open(_DEBUG_PAYLOADS_PATH, "a", encoding="utf-8") as fh:
+        with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, separators=(",", ":")) + "\n")
     except Exception:
         pass  # never fail the hook on a debug-write error
@@ -235,7 +254,7 @@ def record_team_event(
     Never raises — format-tolerant on any payload shape.
     """
     # Best-effort self-capture for field-name verification (step 1).
-    _capture_raw_payload(payload)
+    _capture_raw_payload(payload, skill_runs_base)
 
     # Extract team name (step 2).
     team_name = extract_team_name(payload)
@@ -302,7 +321,7 @@ def mark_team_runs_completed(
     if not session_id:
         return
 
-    base = Path(skill_runs_base).expanduser() if skill_runs_base else _resolve_base_dir()
+    base = Path(skill_runs_base).expanduser() if skill_runs_base else rundir._resolve_base_dir()
     team_name = team_name_from_session(session_id)
     run_id = f"team-{team_name}"
 
