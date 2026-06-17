@@ -1,27 +1,35 @@
 #!/usr/bin/env python3
-"""Hook-driven bridge from Agent Teams / adversarial-skill hook events to the
-durable event substrate.
+"""Bridge from Agent Teams events to the durable event substrate.
 
-Agent Teams runs are NOT captured via on-disk directories (format unknown +
-dirs are reaped at session end). Instead, they are captured LIVE from the hook
-stream: TaskCreated, TaskCompleted, TeammateIdle, SubagentStart, and
-SubagentStop payloads that carry a resolvable team_name are written into a
-substrate run with id ``team-<team_name>``.
+Two complementary sources feed a substrate run with id ``team-<team_name>``:
 
-ASSUMED FIELD NAMES (R-008 / teams_bridge)
--------------------------------------------
-All field names extracted from hook payloads are ASSUMED — no real Agent Teams
-run has been captured to verify them. Every assumed name is marked with an
-``# ASSUMED (unverified)`` comment. Update the constant at the top of this
-module when a real run confirms or refutes the name.
+1. AUTHORITATIVE membership (C1 fix) — the runtime writes a readable,
+   well-structured ``~/.claude/teams/<team_name>/config.json`` (keys: ``name``,
+   ``createdAt``, ``leadAgentId``, ``leadSessionId``, ``members[]`` with
+   ``agentId``/``name``/``agentType``/``joinedAt``/… and optional ``prompt``/
+   ``model`` on teammates).  ``read_team_config`` reads it READ-ONLY and
+   TOLERANTLY (the dir is runtime-owned and may be rewritten while live, so we
+   never pre-author or mutate it) and emits a ``team_members`` event so the
+   teammates projection carries the REAL ``name`` + ``agentType``.  This
+   replaces guessing hook-payload field names (DL-015 native-first: the runtime
+   already records this — don't reconstruct it from a null payload field).
 
-Team name derivation (per Agent Teams docs):
-    team_name = "session-" + session_id[:8]
+2. IN-FLIGHT activity — TaskCreated, TaskCompleted, TeammateIdle, SubagentStart,
+   and SubagentStop hook payloads captured LIVE from the stream give per-event
+   visibility (task graph, idle transitions) the static config cannot.
 
-Correlation key: ``team_name`` (or derived from ``session_id``).
-Run id prefix: ``team-``
+Historical note (the C1 lesson): an earlier version claimed the teams dir had
+"unknown format + reaped at session end" and relied solely on the hook stream.
+That was an over-generalization made before any team had formed (the dirs were
+merely *not yet populated*, not reaped). The dirs persist and the JSON is
+authoritative; config.json is now the source of truth for membership.
 
-Design references: M-003, DL-002, R-008.
+Team name derivation (when a payload lacks an explicit name):
+    team_name = "session-" + session_id[:8]   (matches config.json ``name``)
+
+Correlation key: ``team_name``.  Run id prefix: ``team-``.
+
+Design references: M-003, DL-002, DL-015, R-008, C1.
 """
 from __future__ import annotations
 
@@ -34,7 +42,7 @@ from typing import Any
 
 from .atomic import write_atomic
 from .eventlog import append_event, read_events
-from .events import EVENT_RUN_STARTED, event_schema
+from .events import EVENT_RUN_STARTED, EVENT_TEAM_MEMBERS, event_schema
 from .fold import empty_projection
 from .hook_adapter import normalize_hook_event
 from .registry import find_run
@@ -47,19 +55,22 @@ from .rundir import RunDir
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# ASSUMED payload field names for Agent Teams events (R-008, unverified)
+# Payload field names for Agent Teams events (R-008 / C1)
 #
-# Change these constants — not any other code — if a real run reveals different
-# field names. Each is marked ASSUMED (unverified) until confirmed.
+# session_id is CONFIRMED (S1 live capture). The team_name fields below were
+# never observed in a real payload — the live path always derives the name from
+# session_id, and AUTHORITATIVE membership now comes from config.json (see
+# read_team_config), not from these. They are kept only as a harmless
+# best-effort shortcut should a future runtime add an explicit field.
 # ---------------------------------------------------------------------------
 
-_PAYLOAD_TEAM_NAME = "team_name"       # ASSUMED (unverified): team correlation key
-_PAYLOAD_TEAM_NAME_CAMEL = "teamName"  # ASSUMED (unverified): camelCase fallback
+_PAYLOAD_TEAM_NAME = "team_name"       # best-effort: never observed in a real payload
+_PAYLOAD_TEAM_NAME_CAMEL = "teamName"  # best-effort: camelCase variant, never observed
 _PAYLOAD_SESSION_ID = "session_id"     # CONFIRMED via S1 (snake_case)
-_PAYLOAD_SESSION_ID_CAMEL = "sessionId"  # ASSUMED (unverified): camelCase fallback
+_PAYLOAD_SESSION_ID_CAMEL = "sessionId"  # best-effort: camelCase fallback
 
-# Debug capture path: raw payloads written here before normalization so the
-# next real teammate run auto-records the actual field shapes.
+# config.json filename written by the runtime under ~/.claude/teams/<team_name>/.
+_TEAM_CONFIG_FILENAME = "config.json"
 
 # Hook event names that indicate an Agent Teams event (always try team capture).
 _TEAM_HOOK_TYPES: frozenset[str] = frozenset({
@@ -117,6 +128,163 @@ def extract_team_name(payload: dict[str, Any]) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Authoritative team membership from config.json (C1)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_teams_dir(
+    skill_runs_base: Path | str | None = None,
+    teams_base: Path | str | None = None,
+) -> Path:
+    """Resolve the runtime-owned teams directory (``~/.claude/teams``).
+
+    Precedence:
+    1. An explicit ``teams_base`` (used by tests for full isolation).
+    2. Otherwise the skill-runs base's SIBLING ``teams`` dir — in production
+       (base=None) this is ``~/.claude/teams``.
+
+    Note: tests pass ``skill_runs_base=tmp_path`` directly, whose parent is the
+    SHARED pytest root, so config-driven tests MUST pass ``teams_base`` to stay
+    isolated; the sibling-derivation is correct only for the real layout.
+    """
+    if teams_base is not None:
+        return Path(teams_base).expanduser()
+    base = Path(skill_runs_base).expanduser() if skill_runs_base else rundir._resolve_base_dir()
+    return base.parent / "teams"
+
+
+def read_team_config(
+    team_name: str,
+    *,
+    skill_runs_base: Path | str | None = None,
+    teams_base: Path | str | None = None,
+) -> dict[str, Any] | None:
+    """Read the runtime-written ``<teams_dir>/<team_name>/config.json``.
+
+    AUTHORITATIVE source of team membership and teammate identity (C1).
+    READ-ONLY and TOLERANT: the directory is runtime-owned and may be rewritten
+    while a team is live, so this never creates, pre-authors, or mutates it, and
+    returns ``None`` on any absence/read/parse failure rather than raising.
+
+    Args:
+        team_name: The team name (``session-<8char>``); also the dir name.
+        skill_runs_base: Override the skill-runs base; teams dir is its sibling.
+        teams_base: Explicit teams directory (tests); takes precedence.
+
+    Returns:
+        The parsed config dict, or ``None`` if the file is absent, unreadable,
+        not valid JSON, or not a JSON object.
+    """
+    if not team_name:
+        return None
+    try:
+        path = _resolve_teams_dir(skill_runs_base, teams_base) / team_name / _TEAM_CONFIG_FILENAME
+        if not path.is_file():
+            return None
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    return cfg if isinstance(cfg, dict) else None
+
+
+def _config_members(cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract the ``members`` list from a config dict, tolerantly.
+
+    Returns only the dict entries; a malformed ``members`` (absent, non-list,
+    or non-dict entries) yields an empty list rather than raising.
+    """
+    members = cfg.get("members")
+    if not isinstance(members, list):
+        return []
+    return [m for m in members if isinstance(m, dict)]
+
+
+def _members_signature(members: list[dict[str, Any]]) -> tuple:
+    """Stable signature of membership identity for change detection (idempotency).
+
+    Captures only the authoritative identity fields so a ``team_members`` event
+    is re-emitted ONLY when the roster actually changes (e.g. a teammate joins),
+    not on every hook fire. Sorted so ordering differences do not spuriously
+    trigger a re-emit.
+    """
+    sig = sorted(
+        (
+            str(m.get("name") or m.get("agentId") or m.get("agent_id") or ""),
+            str(m.get("agentType") or m.get("agent_type") or ""),
+            str(m.get("agentId") or m.get("agent_id") or ""),
+        )
+        for m in members
+    )
+    return tuple(sig)
+
+
+def _last_recorded_members_signature(run_dir: RunDir) -> tuple | None:
+    """Signature of the most recent ``team_members`` event already in the log.
+
+    Returns ``None`` if no such event exists yet. Tolerant of a missing or
+    unreadable event log (treated as "none recorded").
+    """
+    try:
+        events = read_events(run_dir)
+    except Exception:
+        return None
+    last: dict[str, Any] | None = None
+    for ev in events:
+        if ev.get("type") == EVENT_TEAM_MEMBERS:
+            last = ev
+    if last is None:
+        return None
+    payload = last.get("payload") or {}
+    members = payload.get("members") or []
+    members = [m for m in members if isinstance(m, dict)]
+    return _members_signature(members)
+
+
+def emit_team_members(
+    team_name: str,
+    run_dir: RunDir,
+    *,
+    skill_runs_base: Path | str | None = None,
+    teams_base: Path | str | None = None,
+) -> bool:
+    """Read config.json and append a ``team_members`` event if the roster changed.
+
+    Idempotent: appends nothing when config.json is absent/empty or when the
+    membership signature matches the last recorded ``team_members`` event. This
+    is the C1 enrichment path — the authoritative roster (real name + agentType)
+    flows into the teammates projection via :func:`fold.fold`.
+
+    Returns:
+        ``True`` if a ``team_members`` event was appended, else ``False``.
+    """
+    cfg = read_team_config(team_name, skill_runs_base=skill_runs_base, teams_base=teams_base)
+    if cfg is None:
+        return False
+    members = _config_members(cfg)
+    if not members:
+        return False
+
+    new_sig = _members_signature(members)
+    if new_sig == _last_recorded_members_signature(run_dir):
+        return False  # roster unchanged — nothing to record
+
+    lead_agent_id = cfg.get("leadAgentId") or cfg.get("lead_agent_id")
+    event = event_schema(
+        type=EVENT_TEAM_MEMBERS,
+        run_id=run_dir.run_id,
+        payload={
+            "team_name": cfg.get("name") or team_name,
+            "lead_agent_id": lead_agent_id,
+            "lead_session_id": cfg.get("leadSessionId") or cfg.get("lead_session_id"),
+            "members": members,
+            "source": "config",
+        },
+    )
+    append_event(run_dir, event)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Idempotent run creation
 # ---------------------------------------------------------------------------
 
@@ -125,6 +293,7 @@ def ensure_team_run(
     team_name: str,
     *,
     skill_runs_base: Path | str | None = None,
+    teams_base: Path | str | None = None,
     skill: str | None = None,
     session_id: str | None = None,
 ) -> RunDir:
@@ -163,6 +332,18 @@ def ensure_team_run(
         "started_at": now_iso,
         "status": "running",
     }
+    # C1: enrich run-state with authoritative lead identity from config.json
+    # (read-only, tolerant — absent config leaves these unset).
+    cfg = read_team_config(team_name, skill_runs_base=skill_runs_base, teams_base=teams_base)
+    if cfg is not None:
+        lead_session_id = cfg.get("leadSessionId") or cfg.get("lead_session_id")
+        lead_agent_id = cfg.get("leadAgentId") or cfg.get("lead_agent_id")
+        if lead_session_id:
+            run_state["lead_session_id"] = lead_session_id
+        if lead_agent_id:
+            run_state["lead_agent_id"] = lead_agent_id
+        if not run_state.get("session_id") and lead_session_id:
+            run_state["session_id"] = lead_session_id
     write_atomic(run_dir.run_state, run_state)
     run_dir.events_jsonl.touch()
     write_atomic(run_dir.projection, empty_projection())
@@ -177,6 +358,10 @@ def ensure_team_run(
         payload={"skill": skill or "agent-teams", "team_name": team_name, "source": "teams_bridge"},
     )
     append_event(run_dir, run_started_ev)
+
+    # C1: seed the authoritative roster immediately so the teammates projection
+    # is populated even before the first TeammateIdle hook fires (idempotent).
+    emit_team_members(team_name, run_dir, skill_runs_base=skill_runs_base, teams_base=teams_base)
 
     return run_dir
 
@@ -231,6 +416,7 @@ def record_team_event(
     payload: dict[str, Any],
     *,
     skill_runs_base: Path | str | None = None,
+    teams_base: Path | str | None = None,
 ) -> str | None:
     """Capture a team-related hook event into the durable substrate.
 
@@ -271,19 +457,20 @@ def record_team_event(
         run_dir = ensure_team_run(
             team_name,
             skill_runs_base=skill_runs_base,
+            teams_base=teams_base,
             session_id=session_id,
         )
+
+        # Refresh authoritative roster (C1): re-read config.json so a teammate
+        # that joined AFTER run creation is captured. No-op when unchanged.
+        emit_team_members(team_name, run_dir, skill_runs_base=skill_runs_base, teams_base=teams_base)
 
         # Normalize payload (step 4).
         event = normalize_hook_event(payload, run_dir.run_id)
         if event is None:
-            # Unknown hook type — not a team event we recognize; still return
-            # the run_id so the caller does not quarantine.
-            return run_dir.run_id
-
-        if event is None:
-            # normalize returned None (unknown hook type) — skip append but
-            # still return run_id to avoid quarantine.
+            # Unknown hook type — not a team event we recognize. Still return the
+            # run_id so the caller does not quarantine (the roster refresh above
+            # may already have recorded useful membership data).
             return run_dir.run_id
 
         # Append event (step 5).

@@ -1,0 +1,42 @@
+{
+  "name": "session-abcd1234",
+  "createdAt": 1781662712076,
+  "leadAgentId": "team-lead@session-abcd1234",
+  "leadSessionId": "abcd1234-efgh-5678-ijkl-mnopqrstuvwx",
+  "members": [
+    {
+      "agentId": "team-lead@session-abcd1234",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "joinedAt": 1781662712076,
+      "tmuxPaneId": "leader",
+      "cwd": "/Users/ethnet/Documents/GitHub/claude-config",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "challenger@session-abcd1234",
+      "name": "challenger",
+      "agentType": "developer",
+      "joinedAt": 1781662715000,
+      "tmuxPaneId": "%1",
+      "cwd": "/Users/ethnet/Documents/GitHub/claude-config",
+      "subscriptions": [],
+      "backendType": "in-process",
+      "prompt": "Attack the proposed decision; surface every failure mode.",
+      "model": "claude-opus-4-8"
+    },
+    {
+      "agentId": "verifier@session-abcd1234",
+      "name": "verifier",
+      "agentType": "quality-reviewer",
+      "joinedAt": 1781662716000,
+      "tmuxPaneId": "%2",
+      "cwd": "/Users/ethnet/Documents/GitHub/claude-config",
+      "subscriptions": [],
+      "backendType": "in-process",
+      "prompt": "Independently verify each claim against the codebase.",
+      "model": "claude-opus-4-8"
+    }
+  ]
+}

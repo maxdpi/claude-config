@@ -37,6 +37,7 @@ from .events import (
     EVENT_TASK_CREATED,
     EVENT_TASK_COMPLETED,
     EVENT_TEAMMATE_IDLE,
+    EVENT_TEAM_MEMBERS,
 )
 
 # ---------------------------------------------------------------------------
@@ -216,6 +217,31 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
             for k, v in payload.items():
                 entry.setdefault(k, v)
             p["teammates"][teammate_id] = entry
+
+    elif etype == EVENT_TEAM_MEMBERS:
+        # Authoritative team membership from ~/.claude/teams/<name>/config.json
+        # (C1 fix). Keyed by the REAL member name; identity fields (name,
+        # agent_type, agent_id, lead) are authoritative and overwrite any prior
+        # guess, while best-effort state (e.g. idle_at from TeammateIdle) is
+        # preserved via the existing entry.
+        payload = event.get("payload") or {}
+        members = payload.get("members") or []
+        lead_agent_id = payload.get("lead_agent_id")
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            name = member.get("name") or member.get("agent_id") or member.get("agentId")
+            if not name:
+                continue
+            entry = p["teammates"].get(name, {})
+            entry["name"] = name
+            entry["agent_type"] = member.get("agentType") or member.get("agent_type")
+            entry["agent_id"] = member.get("agentId") or member.get("agent_id")
+            entry["source"] = "config"
+            agent_id = entry["agent_id"]
+            entry["is_lead"] = bool(lead_agent_id) and agent_id == lead_agent_id
+            entry.setdefault("status", "active")
+            p["teammates"][name] = entry
 
     # Unknown event types: return projection unchanged (C-005, forward-compat).
     return p
