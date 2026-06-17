@@ -1,5 +1,13 @@
 # My Claude Code Workflow
 
+> **This is a fork of [solatis/claude-config](https://github.com/solatis/claude-config).**
+> It keeps the upstream philosophy (planning before execution, context hygiene,
+> review cycles) but re-platforms the entire skills suite onto Claude Code's
+> **native orchestration runtimes** and adds a **durable, cross-session skill-run
+> persistence substrate**. See [What This Fork Changes](#what-this-fork-changes)
+> for the full list. Original credit for the philosophy and the first generation
+> of skills goes to the upstream author.
+
 I use Claude Code for most of my work. After months of iteration, I noticed a
 pattern: LLM-assisted code rots faster than hand-written code. Technical debt
 accumulates because the LLM does not know what it does not know, and neither do
@@ -7,6 +15,46 @@ you until it is too late.
 
 This repo is my solution: skills and workflows that force planning before
 execution, keep context focused, and catch mistakes before they compound.
+
+## What This Fork Changes
+
+Upstream orchestrated multi-phase skills through a Python CLI runtime: each skill
+re-invoked itself with `--step N`, and a `subagent.py` emitted prose dispatch
+directives to coordinate fan-out. That re-invocation loop was the *only* thing
+giving skills cross-session durability. This fork removes that runtime entirely
+and rebuilds the capability on native primitives. The high-level changes:
+
+- **Native-runtime port of all 10 skills.** Linear/staged skills
+  (`codebase-analysis`, `refactor`, `planner`, `arxiv-to-md`, `incoherence`,
+  `prompt-engineer`, `leon-writing-style`) now run on the **Workflow tool**
+  (`workflow.mjs`); divergent/adversarial skills (`decision-critic`, `deepthink`,
+  `problem-analysis`) now run on **Agent Teams** (`SKILL.md`). The Python `--step`
+  CLI, the `--step` re-invocation loop, and the `subagent.py` dispatch-prose
+  machinery are deleted.
+- **Durable skill-run persistence substrate.** A thin external store at
+  `~/.claude/skill-runs/<run_id>/` (append-only `events.jsonl` → pure fold →
+  `projection.json` + `run-state.json`, all atomic writes) records native runtime
+  state and survives crashes, `/clear`, and session exit — the cross-session
+  resume the native runtimes lack on their own.
+- **Run-management slash commands:** `/runs`, `/run-status <id>`, and a
+  phase-aware `/resume <id>` with a default-deny consent gate.
+- **`settings.json` hook wiring** that mirrors runtime state *out* into the
+  substrate (`SessionStart`/`Stop`/`SessionEnd`, `SubagentStart`/`SubagentStop`,
+  `TaskCreated`/`TaskCompleted`/`TeammateIdle`).
+- **Agent Teams bridge** that captures Agent Teams runs into the substrate, with
+  graceful degradation to Workflow tool + subagents when Agent Teams is disabled.
+- **New skill** `leon-writing-style` and a new **`researcher`** subagent.
+- **Vendored official Claude Code docs** (`docs/claude-code/`, ~150 files) plus a
+  refresh script, so the suite can be built and reviewed against a pinned copy of
+  the platform docs.
+- **A pytest substrate test harness** (`tests/`) — persistence core, hook
+  adapters, resume engine, port-parity fixtures, plus property and chaos layers.
+- **19 per-directory `CLAUDE.md` indexes** added across the tree for context
+  hygiene, and `sync.sh` for installing the config into `~/.claude`.
+
+The sections below ("Why This Exists", "Principles", "Usage") describe the
+inherited philosophy. The fork-specific machinery is detailed under
+[Architecture: Native Runtimes + Durable Substrate](#architecture-native-runtimes--durable-substrate).
 
 ## Why This Exists
 
@@ -125,21 +173,51 @@ approach, give it a shot. I would like to hear what works and what does not.
 
 ## Quick Start
 
-Clone into your Claude Code configuration directory:
+Clone the fork into your Claude Code configuration directory:
 
 ```bash
 # Per-project
-git clone https://github.com/solatis/claude-config .claude
+git clone https://github.com/jeanbrazeau/claude-config .claude
 
 # Global (new setup)
-git clone https://github.com/solatis/claude-config ~/.claude
+git clone https://github.com/jeanbrazeau/claude-config ~/.claude
 
 # Global (existing ~/.claude)
 cd ~/.claude
-git remote add workflow https://github.com/solatis/claude-config
+git remote add workflow https://github.com/jeanbrazeau/claude-config
 git fetch workflow
 git merge workflow/main --allow-unrelated-histories
 ```
+
+If you clone elsewhere, install the config dirs into `~/.claude` with the
+included installer (it `rsync --delete`s the tracked directories into place):
+
+```bash
+./sync.sh
+```
+
+The skill-run substrate is wired through hooks in `settings.json`, which expect
+the Python helpers at `~/.claude/skills/scripts/`. After installing globally the
+hooks fire automatically; no extra setup is needed. The persistence/orchestration
+substrate has its own test suite:
+
+```bash
+PYTHONPATH=skills/scripts python3 -m pytest tests/ -q
+```
+
+### Configuration
+
+`settings.json` exposes the substrate knobs:
+
+- `skillRuns.baseDir` — where runs are stored (default `~/.claude/skill-runs`).
+- `skillRuns.retentionDays` — TTL for **done** runs only; crashed/incomplete runs
+  are kept indefinitely (they are the resumable ones).
+- `skillRuns.copyTranscript` — copy the native subagent transcript into the run
+  dir on `SubagentStop` (default `true`); set `false` to rely solely on native
+  transcripts.
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — opt into Agent Teams mode for the
+  adversarial skills. When unset, those skills degrade gracefully to the Workflow
+  tool + Agent-tool subagents; resume semantics are identical in both modes.
 
 ## Usage
 
@@ -262,6 +340,115 @@ The developer, debugger, technical writer, and quality reviewer run the
 implementation. Each milestone passes review before the next starts. If the
 implementation deviated from the plan, I would know.
 
+## Architecture: Native Runtimes + Durable Substrate
+
+This is the largest change in the fork. Upstream's skills were driven by a Python
+`--step` CLI that re-invoked itself between phases; that re-invocation was what
+let a run survive a fresh session. Claude Code now ships native orchestration
+primitives — the **Workflow tool** (deterministic JS, journal-based
+`resumeFromRunId`, same-session only), **Agent Teams** (lead + teammates + shared
+task list, experimental/env-gated, all state ephemeral), and **Agent-tool
+subagents** (ephemeral, report-back only). All three execute orchestration well
+but lack the one thing the Python loop provided: **cross-session durability and
+resume**. A run that crashes, a session that exits, or a script edited mid-flight
+loses all progress.
+
+The fork's answer is a **thin durable substrate around the native runtimes** —
+not a new orchestrator. Native runtimes drive execution; the substrate only
+*records* it and *replays* it.
+
+### How it works
+
+```
+Native runtimes (Workflow tool / Agent Teams / subagents)
+        │  Task/Teammate/SubagentStop events (hooks, mirror OUT)
+        ▼
+Hook adapters  ──normalize──▶  events.jsonl  (append-only, O_APPEND atomic)
+                                    │  replay
+                                    ▼
+                              pure fold  ──▶  projection.json + run-state.json
+                                    ▲                    │  (atomic tmp+rename)
+        /runs · /run-status · /resume <id>  ────read─────┘
+```
+
+Data flow is **one-directional**: runtimes → hooks → event log → fold →
+projection. The store lives at `~/.claude/skill-runs/<run_id>/`, **outside** the
+runtime-owned dirs (`~/.claude/teams`, `~/.claude/tasks`) that the runtime
+overwrites while live and reaps on session end. The substrate treats those dirs
+as read-only-while-live and copies state *outward* through hook events — it never
+authors or edits them.
+
+Key invariants (ported from the upstream "koan" persistence design):
+
+- **File-boundary:** LLM-facing agents write `.md` only; the substrate is the
+  sole writer of `.json`.
+- **Atomic writes:** every `.json` is written tmp-then-`os.rename`, so concurrent
+  readers never see torn state. Concurrent same-run appends are serialized by an
+  advisory `flock` around the append→fold→projection-rewrite section.
+- **Pure, forward-compatible fold:** the fold ignores unknown event types and
+  fields, so evolving (experimental) runtime hooks don't break replay.
+- **Retention:** prune only `done`/tombstoned runs past the TTL; keep
+  crashed/incomplete runs forever — those are precisely the resumable ones.
+
+### Resume is phase-aware
+
+`/resume` does not blindly replay. Each skill declares its phases tagged
+`read_only | write | execute` in a `manifest.json` written at run creation. On
+resume the engine **auto-replays read-only/planning phases** but **requires
+explicit confirmation before any write/execute phase** (default-deny for any
+untagged phase). For Agent Teams it never tries to rehydrate dead teammates —
+teammates are ephemeral — it re-spawns a **fresh team scoped to the remaining
+tasks** reconstructed from the durable task graph.
+
+One sharp edge it handles: native `permissionMode` is the enforcement mechanism
+for read-only phases, but a permissive parent session
+(`bypassPermissions`/`acceptEdits`/`auto`) overrides a child's `plan` mode. When
+the parent mode overrides, the engine drops to full default-deny (every phase
+needs confirmation) and `/resume` warns you.
+
+The full decision log (DL-001..DL-026), constraints, and the wave-by-wave
+implementation plan live in [`PERSISTENCE-PLAN.md`](PERSISTENCE-PLAN.md) and
+[`plan/`](plan/).
+
+## Run Management
+
+The substrate is exposed through three slash commands:
+
+| Command | What it does |
+| --- | --- |
+| `/runs` | List durable skill runs (no arguments). |
+| `/run-status <id>` | Show state and projection for one run. |
+| `/resume <id>` | Phase-aware resume with a default-deny consent gate. |
+
+A `SessionStart` hook also detects incomplete runs and offers to resume them, and
+prunes terminal runs past the retention TTL.
+
+## Skills & Agents
+
+**Skills** (`skills/`): `arxiv-to-md`, `cc-history`, `codebase-analysis`,
+`decision-critic`, `deepthink`, `doc-sync`, `incoherence`, `leon-writing-style`
+*(new in this fork)*, `planner`, `problem-analysis`, `prompt-engineer`,
+`refactor`. Linear skills carry a `workflow.mjs` (Workflow tool); adversarial
+skills carry a `SKILL.md` (Agent Teams).
+
+**Subagents** (`agents/`): `architect`, `debugger`, `developer`,
+`quality-reviewer`, `technical-writer`, and `researcher` *(new in this fork)*.
+Leaf workers carry `disallowedTools: Agent` so a spawned worker cannot itself
+spawn; the spawn surface is constrained entirely by native primitives
+(`Agent(type)` allowlists and `permissions.deny`) rather than the removed Python
+dispatch-prose guards.
+
+## Vendored Docs & Tests
+
+- **`docs/claude-code/`** — a mirrored, organized copy of the official Claude Code
+  docs (~150 files) plus a refresh script, so skill ports can be built and
+  reviewed against a pinned snapshot of the platform.
+- **`tests/`** — a pytest suite for the substrate: persistence core, hook
+  adapters, contract/registry/retention, resume engine, the Agent Teams bridge,
+  Workflow/adversarial **port-parity fixtures** (proving each native port matches
+  the retired Python behavior before deletion), plus property-based and chaos
+  layers. Run with `PYTHONPATH=skills/scripts python3 -m pytest tests/ -q`.
+
 ## Other Skills
 
 Not every task needs the full planning workflow. These skills handle specific
@@ -383,4 +570,14 @@ For targeted updates:
 
 ```
 Use your doc-sync skill to update documentation in src/validators/
+```
+
+### Leon Writing Style
+
+New in this fork. A staged writing workflow that generates style-matched content
+rather than analysis — it runs its phases on the Workflow tool like the other
+linear skills.
+
+```
+Use your leon-writing-style skill to draft [content]
 ```
