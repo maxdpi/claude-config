@@ -32,19 +32,19 @@ apply to the lead / Agent-tool path; both are **inert on the Agent Teams teammat
 path**, where only `tools`/`model`/body apply.
 
 - **Agent Teams enabled** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): spawn
-  **N investigator teammates** in parallel — "Spawn a teammate using the `developer`
+  **N investigator teammates** in parallel — "Spawn a teammate using the `researcher`
   agent type as *investigator-H1* …" (one per top-ranked hypothesis). This is the
   canonical Agent Teams use case: teammates debate each other's findings when they
   contradict. The durable hooks (TaskCreated / TaskCompleted / TeammateIdle /
   SubagentStop) mirror progress into the substrate. On resume, re-spawn a fresh team
   for the remaining investigation iterations (teammates are ephemeral).
 - **Agent Teams disabled** (default): spawn them as **Agent-tool subagents** in one
-  parallel batch — `Agent(subagent_type='developer', …)` for each investigator. The
+  parallel batch — `Agent(subagent_type='researcher', …)` for each investigator. The
   lead synthesizes their potentially-contradictory findings and drives the next
   iteration. Same durable events (via the SubagentStart/Stop hooks). This is the
   normal path.
 
-Either way: the worker role is the registered subagent type `developer`
+Either way: the worker role is the registered subagent type `researcher`
 (investigator); you (the lead / `architect` perspective) own steps 1–2 and 4–5.
 Put the step 3 instructions below into each worker's spawn prompt with its
 assigned hypothesis.
@@ -97,7 +97,7 @@ FRAMING RULES (critical):
 
 RANK BY PLAUSIBILITY. Include INVESTIGATION PLAN.
 
-### Step 3 — Investigate  *(investigator workers — developer — up to 5 iterations)*
+### Step 3 — Investigate  *(investigator workers — researcher — up to 5 iterations)*
 
 Each investigator worker is assigned ONE hypothesis (or one unexplored aspect).
 Workers investigate independently and their findings may contradict each other —

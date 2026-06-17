@@ -1,6 +1,6 @@
 ---
 name: cc-history
-description: Reference documentation for analyzing Claude Code conversation history files
+description: Query and analyze Claude Code conversation history files (~/.claude/projects) — past sessions, token usage, tool calls, and message timelines. Use when the user asks about prior conversations, historical usage, or how to parse Claude Code transcript files.
 ---
 
 # Claude Code History Analysis

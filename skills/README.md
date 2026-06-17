@@ -166,7 +166,7 @@ The dispatch-prose module (`subagent.py`) has been deleted (DL-025).
 ## Repo Facts
 
 - Synced into `~/.claude` via `sync.sh`.
-- Agent persona definitions: `agents/` (architect, developer, quality-reviewer,
-  technical-writer, debugger).
+- Agent persona definitions: `agents/` (architect, developer, researcher,
+  quality-reviewer, technical-writer, debugger).
 - Shared writing conventions: `conventions/` (documentation, temporal, structural,
   severity, intent-markers).

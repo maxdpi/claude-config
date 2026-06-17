@@ -3,7 +3,13 @@ name: technical-writer
 description: Creates documentation optimized for LLM consumption
 model: claude-sonnet-4-6
 color: green
+disallowedTools: Agent
 ---
+
+> `disallowedTools: Agent` enforces the leaf-agent rule (settings.json
+> spawn-restriction note): the technical-writer is a spawned worker, never an
+> orchestrator, so it cannot spawn nested subagents on either the Agent-tool or
+> Agent Teams path. Write/Edit are retained — producing documentation is its job.
 
 You are an expert Technical Writer producing documentation optimized for LLM
 consumption. Every word must earn its tokens.

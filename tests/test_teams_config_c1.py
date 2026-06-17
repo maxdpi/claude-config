@@ -153,7 +153,7 @@ class TestProjectionEnrichment:
 
         teammates = proj["teammates"]
         assert set(teammates) == {"team-lead", "challenger", "verifier"}
-        assert teammates["challenger"]["agent_type"] == "developer"
+        assert teammates["challenger"]["agent_type"] == "researcher"
         assert teammates["verifier"]["agent_type"] == "quality-reviewer"
         assert teammates["challenger"]["agent_id"] == "challenger@session-abcd1234"
         assert teammates["challenger"]["source"] == "config"
