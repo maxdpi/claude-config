@@ -158,7 +158,8 @@ Output JSON:
   try {
     const parsed = JSON.parse(dimensionResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
     dimensions = parsed.dimensions ?? [];
-  } catch {
+  } catch (error) {
+    log(`Dimension parse failed (${error.message}); using defaults`);
     dimensions = [
       { letter: "A", name: "Specification vs Behavior" },
       { letter: "C", name: "Cross-Reference Consistency" },
@@ -248,8 +249,8 @@ Output JSON:
   try {
     const parsed = JSON.parse(candidatesResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
     candidates = parsed.candidates ?? [];
-  } catch {
-    log("Candidate parsing failed");
+  } catch (error) {
+    log(`Candidate parsing failed (${error.message})`);
   }
 
   log(`${candidates.length} candidates for deep-dive verification`);
@@ -338,8 +339,8 @@ Output JSON:
     const parsed = JSON.parse(verdictsResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
     verdicts = parsed.verdicts ?? [];
     groups = parsed.groups ?? [];
-  } catch {
-    log("Verdict parsing failed");
+  } catch (error) {
+    log(`Verdict parsing failed (${error.message})`);
   }
 
   const confirmedVerdicts = verdicts.filter((v) => v.verdict !== "FALSE_POSITIVE");
@@ -392,8 +393,8 @@ Collect all responses. Output:
   try {
     const parsed = JSON.parse(resolutionResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
     resolutions = parsed.resolutions ?? [];
-  } catch {
-    log("Resolution parsing failed");
+  } catch (error) {
+    log(`Resolution parsing failed (${error.message})`);
   }
 
   const activeResolutions = resolutions.filter((r) => !r.skip);

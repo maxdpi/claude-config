@@ -50,6 +50,11 @@ from skills.lib.workflow.persistence.hook_adapter import (
     _PAYLOAD_AGENT_TRANSCRIPT_PATH,
 )
 from skills.lib.workflow.persistence.eventlog import append_event
+from skills.lib.workflow.persistence.paths import (
+    claude_dir,
+    quarantine_path,
+    read_settings_file,
+)
 from skills.lib.workflow.persistence.registry import list_runs, find_run
 from skills.lib.workflow.persistence.rundir import _resolve_base_dir
 from skills.lib.workflow.persistence.probe.subagent_transcript_probe import (
@@ -60,32 +65,31 @@ from skills.lib.workflow.persistence.teams_bridge import (
     _TEAM_HOOK_TYPES,
     extract_team_name,
 )
-from skills.lib.workflow.persistence.resume import _CLAUDE_DIR, _read_settings_file
-
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
-
 
 def _copy_transcript_enabled() -> bool:
     """Whether copy-on-stop is enabled (``skillRuns.copyTranscript``, default True).
 
-    Read via the same settings idiom ``resume.py`` uses (``settings.local.json``
-    takes precedence over ``settings.json``). Copy-on-stop is a conscious
-    DL-015 (NATIVE-FIRST) exception kept ENABLED by default (DL-030): the
-    runtime persists native transcripts for ``cleanupPeriodDays`` (default 30),
-    but DL-020's resume age-guard needs a transcript path that RESOLVES at resume
-    time, and the native path is session/worktree-relative and may be reaped
-    early or unresolvable. The run-local copy is that stable fallback anchor.
-    NATIVE-FIRST purists can set ``copyTranscript: false`` to opt out. The flag
-    gates the copy ACTION only — it does not change which field is read.
+    Read via the shared settings idiom in ``paths.read_settings_file``
+    (``settings.local.json`` takes precedence over ``settings.json``).
+    Copy-on-stop is a conscious DL-015 (NATIVE-FIRST) exception kept ENABLED by
+    default (DL-030): the runtime persists native transcripts for
+    ``cleanupPeriodDays`` (default 30), but DL-020's resume age-guard needs a
+    transcript path that RESOLVES at resume time, and the native path is
+    session/worktree-relative and may be reaped early or unresolvable. The
+    run-local copy is that stable fallback anchor. NATIVE-FIRST purists can set
+    ``copyTranscript: false`` to opt out. The flag gates the copy ACTION only —
+    it does not change which field is read.
     """
     for name in ("settings.local.json", "settings.json"):
-        skill_runs = _read_settings_file(_CLAUDE_DIR / name).get("skillRuns")
+        skill_runs = read_settings_file(claude_dir() / name).get("skillRuns")
         if isinstance(skill_runs, dict) and "copyTranscript" in skill_runs:
             return bool(skill_runs["copyTranscript"])
     return True  # behavior-preserving default (C-001)
 
-_QUARANTINE_PATH: Path = _resolve_base_dir().parent / "skill-run-quarantine.jsonl"
+
+_QUARANTINE_PATH: Path = quarantine_path(_resolve_base_dir())
 
 
 # ---------------------------------------------------------------------------

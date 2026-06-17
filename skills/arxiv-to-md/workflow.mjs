@@ -121,8 +121,8 @@ For MODE 2:
     mode = parsed.mode ?? 1;
     papers = parsed.papers ?? [];
     skipped = parsed.skipped ?? [];
-  } catch {
-    log("Discover parse failed — no papers to convert");
+  } catch (error) {
+    log(`Discover parse failed (${error.message}) — no papers to convert`);
   }
 
   log(`Mode ${mode}: ${papers.length} paper(s) to convert, ${skipped.length} skipped`);

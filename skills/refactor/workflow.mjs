@@ -91,8 +91,8 @@ Output as JSON:
     const parsed = JSON.parse(modeResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
     mode = parsed.mode ?? "code";
     scope = parsed.scope ?? null;
-  } catch {
-    log("Mode selection parse failed, defaulting to code mode");
+  } catch (error) {
+    log(`Mode selection parse failed (${error.message}); defaulting to code mode`);
   }
 
   log(`Mode: ${mode}, Scope: ${scope ?? "codebase-wide"}, N: ${n}`);
@@ -130,8 +130,8 @@ Output as JSON:
   try {
     const parsed = JSON.parse(dispatchResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
     categories = parsed.categories ?? [];
-  } catch {
-    log("Category parsing failed, using placeholder categories");
+  } catch (error) {
+    log(`Category parsing failed (${error.message}); using placeholder categories`);
     categories = Array.from({ length: Math.min(n, 5) }, (_, i) => ({
       id: `cat-${i + 1}`,
       name: `Category ${i + 1}`,

@@ -146,6 +146,43 @@ def normalize_hook_event(
 
 
 # ---------------------------------------------------------------------------
+# Boundary validation helpers (R-008 / I4)
+#
+# Hook payloads are externally sourced and unvalidated; a shape change upstream
+# must surface as a logged, contained anomaly rather than a runtime crash or a
+# silent misnormalization.  fold() stays deliberately tolerant (C-005) — these
+# guards live HERE, at the single normalization boundary.
+# ---------------------------------------------------------------------------
+
+
+def _coerce_int(value: Any, default: int, *, field: str, hook_type: str) -> int:
+    """Coerce *value* to int; return *default* and log on a non-numeric value.
+
+    A bare ``int(payload[...])`` crashes the hook on shape drift (e.g. a string
+    that is not a number).  This keeps the hook non-fatal and observable (I4).
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        log.warning(
+            "hook_adapter: %s payload field %r is not an integer (%r) -- "
+            "defaulting to %d", hook_type, field, value, default,
+        )
+        return default
+
+
+def _warn_missing(field: str, hook_type: str) -> None:
+    """Log a WARNING that a required payload field is absent (shape drift, I4)."""
+    log.warning(
+        "hook_adapter: %s payload missing required field %r -- the resulting "
+        "event will not correlate (R-008); update the _PAYLOAD_* constant if the "
+        "runtime renamed it", hook_type, field,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Per-hook normalizers
 # ---------------------------------------------------------------------------
 
@@ -173,7 +210,9 @@ def _normalize_subagent_start(raw: dict[str, Any], run_id: str) -> dict[str, Any
 
     native_session_id: str | None = raw.get(_PAYLOAD_SESSION_ID) or None
     parent_agent_id: str | None = raw.get(_PAYLOAD_PARENT_AGENT_ID) or None
-    depth: int = int(raw.get(_PAYLOAD_DEPTH) or 0)
+    depth: int = _coerce_int(
+        raw.get(_PAYLOAD_DEPTH), 0, field=_PAYLOAD_DEPTH, hook_type="SubagentStart",
+    )
 
     return event_schema(
         type=EVENT_SUBAGENT_SPAWNED,
@@ -221,12 +260,15 @@ def _normalize_subagent_stop(raw: dict[str, Any], run_id: str) -> dict[str, Any]
 
 def _normalize_task_created(raw: dict[str, Any], run_id: str) -> dict[str, Any]:
     """TaskCreated -> EVENT_TASK_CREATED."""
+    task_id = raw.get(_PAYLOAD_TASK_ID)
+    if not task_id:
+        _warn_missing(_PAYLOAD_TASK_ID, "TaskCreated")
     return event_schema(
         type=EVENT_TASK_CREATED,
         run_id=run_id,
-        agent_id=raw.get(_PAYLOAD_TASK_ID),
+        agent_id=task_id,
         payload={
-            "task_id": raw.get(_PAYLOAD_TASK_ID),
+            "task_id": task_id,
             "title": raw.get(_PAYLOAD_TITLE) or "",
             "session_id": raw.get(_PAYLOAD_SESSION_ID),
         },
@@ -235,12 +277,15 @@ def _normalize_task_created(raw: dict[str, Any], run_id: str) -> dict[str, Any]:
 
 def _normalize_task_completed(raw: dict[str, Any], run_id: str) -> dict[str, Any]:
     """TaskCompleted -> EVENT_TASK_COMPLETED."""
+    task_id = raw.get(_PAYLOAD_TASK_ID)
+    if not task_id:
+        _warn_missing(_PAYLOAD_TASK_ID, "TaskCompleted")
     return event_schema(
         type=EVENT_TASK_COMPLETED,
         run_id=run_id,
-        agent_id=raw.get(_PAYLOAD_TASK_ID),
+        agent_id=task_id,
         payload={
-            "task_id": raw.get(_PAYLOAD_TASK_ID),
+            "task_id": task_id,
             "session_id": raw.get(_PAYLOAD_SESSION_ID),
         },
     )

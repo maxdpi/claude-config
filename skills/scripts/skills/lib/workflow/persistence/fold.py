@@ -79,65 +79,72 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     Returns:
         A new projection dict reflecting the event.
     """
-    p = copy.deepcopy(projection)
+    # Rebind to the working copy: the input is never mutated (C-005); all
+    # mutations below land on this deep copy.
+    projection = copy.deepcopy(projection)
     etype = event.get("type")
 
     if etype == EVENT_RUN_STARTED:
-        p["run_id"] = event.get("run_id") or p["run_id"]
-        p["status"] = "running"
+        projection["run_id"] = event.get("run_id") or projection["run_id"]
+        projection["status"] = "running"
         payload = event.get("payload") or {}
         if "skill" in payload:
-            p["skill"] = payload["skill"]
+            projection["skill"] = payload["skill"]
 
     elif etype == EVENT_RUN_COMPLETED:
-        p["status"] = "completed"
+        projection["status"] = "completed"
 
     elif etype == EVENT_RUN_FAILED:
-        p["status"] = "failed"
+        projection["status"] = "failed"
         payload = event.get("payload") or {}
         if "error" in payload:
-            p["error"] = payload["error"]
+            projection["error"] = payload["error"]
 
     elif etype == EVENT_PHASE_STARTED:
         payload = event.get("payload") or {}
         phase_id = payload.get("phase_id") or payload.get("phase")
         if phase_id:
-            entry = p["phases"].get(phase_id, {})
+            entry = projection["phases"].get(phase_id, {})
             entry["status"] = "running"
             if "started_at" not in entry:
                 entry["started_at"] = event.get("ts")
-            p["phases"][phase_id] = entry
+            projection["phases"][phase_id] = entry
 
     elif etype == EVENT_PHASE_COMPLETED:
         payload = event.get("payload") or {}
         phase_id = payload.get("phase_id") or payload.get("phase")
         if phase_id:
-            entry = p["phases"].get(phase_id, {})
+            entry = projection["phases"].get(phase_id, {})
             entry["status"] = "completed"
             entry["completed_at"] = event.get("ts")
             if "result" in payload:
                 entry["result"] = payload["result"]
-            p["phases"][phase_id] = entry
+            projection["phases"][phase_id] = entry
 
     elif etype == EVENT_MILESTONE_STATUS:
         payload = event.get("payload") or {}
-        mid = payload.get("milestone_id") or payload.get("milestone")
-        if mid:
-            entry = p["milestones"].get(mid, {})
+        milestone_id = payload.get("milestone_id") or payload.get("milestone")
+        if milestone_id:
+            entry = projection["milestones"].get(milestone_id, {})
             if "status" in payload:
                 entry["status"] = payload["status"]
             if "ts" not in entry:
                 entry["ts"] = event.get("ts")
-            p["milestones"][mid] = entry
+            projection["milestones"][milestone_id] = entry
 
     elif etype == EVENT_RESUME_CURSOR:
         payload = event.get("payload") or {}
-        p["resume_cursor"] = payload.get("cursor")
+        projection["resume_cursor"] = payload.get("cursor")
 
     elif etype == EVENT_SUBAGENT_SPAWNED:
-        aid = event.get("agent_id")
-        if aid:
-            entry = p["subagents"].get(aid, {})
+        # NAMESPACE NOTE (I3): for subagent events the envelope's ``agent_id`` IS
+        # the NATIVE Claude Code agent id (hook_adapter sets agent_id ==
+        # native_agent_id).  The ``subagents`` map is therefore keyed by the
+        # native id, and ``native_agent_id`` is also stored explicitly in the
+        # entry so a consumer never has to infer which namespace the key holds.
+        agent_id = event.get("agent_id")
+        if agent_id:
+            entry = projection["subagents"].get(agent_id, {})
             entry["status"] = "spawned"
             entry["spawned_at"] = event.get("ts")
 
@@ -162,15 +169,18 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
                 entry["_warnings"] = warnings
 
             payload = event.get("payload") or {}
-            for k, v in payload.items():
-                entry.setdefault(k, v)
+            for key, value in payload.items():
+                entry.setdefault(key, value)
 
-            p["subagents"][aid] = entry
+            projection["subagents"][agent_id] = entry
 
     elif etype == EVENT_SUBAGENT_COMPLETED:
-        aid = event.get("agent_id")
-        if aid:
-            entry = p["subagents"].get(aid, {})
+        # See the namespace note on EVENT_SUBAGENT_SPAWNED (I3): the key is the
+        # native agent id, and the native id is never written back over a
+        # different namespace — it stays in ``native_agent_id``.
+        agent_id = event.get("agent_id")
+        if agent_id:
+            entry = projection["subagents"].get(agent_id, {})
             entry["status"] = "completed"
             entry["completed_at"] = event.get("ts")
             payload = event.get("payload") or {}
@@ -181,7 +191,7 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
                 entry["native_agent_id"] = payload["native_agent_id"]
             if "native_session_id" in payload:
                 entry["native_session_id"] = payload["native_session_id"]
-            p["subagents"][aid] = entry
+            projection["subagents"][agent_id] = entry
 
     elif etype == EVENT_TASK_CREATED:
         # Agent Teams task graph: record task as pending/in_progress.
@@ -189,21 +199,21 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
         payload = event.get("payload") or {}
         task_id = payload.get("task_id")  # ASSUMED (unverified)
         if task_id:
-            entry = p["tasks"].get(task_id, {})
+            entry = projection["tasks"].get(task_id, {})
             entry["status"] = "in_progress"
             entry.setdefault("title", payload.get("title") or "")  # ASSUMED (unverified)
             entry.setdefault("created_at", event.get("ts"))
-            p["tasks"][task_id] = entry
+            projection["tasks"][task_id] = entry
 
     elif etype == EVENT_TASK_COMPLETED:
         # Agent Teams task graph: transition task to completed.
         payload = event.get("payload") or {}
         task_id = payload.get("task_id")  # ASSUMED (unverified)
         if task_id:
-            entry = p["tasks"].get(task_id, {})
+            entry = projection["tasks"].get(task_id, {})
             entry["status"] = "completed"
             entry["completed_at"] = event.get("ts")
-            p["tasks"][task_id] = entry
+            projection["tasks"][task_id] = entry
 
     elif etype == EVENT_TEAMMATE_IDLE:
         # Agent Teams: record teammate idle state.
@@ -211,12 +221,12 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
         payload = event.get("payload") or {}
         teammate_id = payload.get("teammate_id")  # ASSUMED (unverified)
         if teammate_id:
-            entry = p["teammates"].get(teammate_id, {})
+            entry = projection["teammates"].get(teammate_id, {})
             entry["status"] = "idle"
             entry["idle_at"] = event.get("ts")
-            for k, v in payload.items():
-                entry.setdefault(k, v)
-            p["teammates"][teammate_id] = entry
+            for key, value in payload.items():
+                entry.setdefault(key, value)
+            projection["teammates"][teammate_id] = entry
 
     elif etype == EVENT_TEAM_MEMBERS:
         # Authoritative team membership from ~/.claude/teams/<name>/config.json
@@ -233,7 +243,7 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
             name = member.get("name") or member.get("agent_id") or member.get("agentId")
             if not name:
                 continue
-            entry = p["teammates"].get(name, {})
+            entry = projection["teammates"].get(name, {})
             entry["name"] = name
             entry["agent_type"] = member.get("agentType") or member.get("agent_type")
             entry["agent_id"] = member.get("agentId") or member.get("agent_id")
@@ -241,7 +251,7 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
             agent_id = entry["agent_id"]
             entry["is_lead"] = bool(lead_agent_id) and agent_id == lead_agent_id
             entry.setdefault("status", "active")
-            p["teammates"][name] = entry
+            projection["teammates"][name] = entry
 
     # Unknown event types: return projection unchanged (C-005, forward-compat).
-    return p
+    return projection

@@ -156,6 +156,7 @@ def read_events(run_dir: "RunDir") -> list[dict]:
     if not path.exists():
         return []
     events: list[dict] = []
+    skipped = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -163,7 +164,14 @@ def read_events(run_dir: "RunDir") -> list[dict]:
         try:
             events.append(json.loads(line))
         except json.JSONDecodeError:
+            skipped += 1
             continue
+    if skipped:
+        # Corruption is degradation, not absence: surface it rather than
+        # returning a silently-shortened event list (I1).
+        log.warning(
+            "eventlog: read_events skipped %d corrupt line(s) in %s", skipped, path,
+        )
     return events
 
 
@@ -176,6 +184,7 @@ def _replay_from_path(events_path: Path) -> dict:
     """Read *events_path* line by line and reduce through fold from empty."""
     projection = empty_projection()
     text = events_path.read_text(encoding="utf-8")
+    skipped = 0
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -183,6 +192,14 @@ def _replay_from_path(events_path: Path) -> dict:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
+            # A corrupt line degrades the projection silently otherwise; count
+            # and warn so the divergence is observable (I1).
+            skipped += 1
             continue
         projection = fold(projection, event)
+    if skipped:
+        log.warning(
+            "eventlog: replay skipped %d corrupt line(s) in %s -- "
+            "projection is derived from a partial log", skipped, events_path,
+        )
     return projection

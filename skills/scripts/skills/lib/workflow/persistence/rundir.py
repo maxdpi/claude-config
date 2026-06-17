@@ -25,16 +25,16 @@ sequential invocations (R-005).
 from __future__ import annotations
 
 import datetime
-import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import paths
 from .atomic import write_atomic
 from .fold import empty_projection
 from .team_mode import select_orchestration_mode
 
-_CLAUDE_DIR = Path.home() / ".claude"
+_CLAUDE_DIR = paths.claude_dir()
 _SETTINGS_KEY = "skillRuns.baseDir"
 _DEFAULT_BASE = _CLAUDE_DIR / "skill-runs"
 
@@ -42,17 +42,12 @@ _DEFAULT_BASE = _CLAUDE_DIR / "skill-runs"
 def _resolve_base_dir() -> Path:
     """Read ``~/.claude/settings.json`` for ``skillRuns.baseDir``; fall back to default.
 
-    The key name is ``skillRuns.baseDir``.  If the settings file is absent or
-    malformed the default ``~/.claude/skill-runs`` is used silently.
+    The key name is ``skillRuns.baseDir``.  If the settings file is absent the
+    default ``~/.claude/skill-runs`` is used silently; a malformed file is
+    logged at WARNING by ``paths.read_settings_file`` (I1) before falling back.
     """
     for name in ("settings.local.json", "settings.json"):
-        p = _CLAUDE_DIR / name
-        if not p.exists():
-            continue
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue
+        data = paths.read_settings_file(_CLAUDE_DIR / name)
         val = data.get("skillRuns", {}).get("baseDir")
         if val:
             return Path(val).expanduser()
