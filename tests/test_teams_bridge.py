@@ -478,3 +478,45 @@ class TestDerivedTeamName:
         events = read_events(handle.as_run_dir())
         types = [e["type"] for e in events]
         assert EVENT_SUBAGENT_SPAWNED in types
+
+
+# ---------------------------------------------------------------------------
+# DL-029: _capture_raw_payload is gated (CLAUDE_SKILL_DEBUG_TEAMS=1, default OFF)
+# and bounded (size cap). The capture is the ONE intentional default flip in
+# Tier-3 — these tests pin the new behavior so it is not silently reverted.
+#
+# Note: the production short-circuit returns early when PYTEST_CURRENT_TEST is
+# set, so each case deletes that var to exercise the real gate/cap path under a
+# fully sandboxed temp base.
+# ---------------------------------------------------------------------------
+
+class TestDebugCaptureGate:
+    def _debug_file(self, tmp_path):
+        from skills.lib.workflow.persistence.teams_bridge import _debug_payloads_path
+        return _debug_payloads_path(tmp_path / "skill-runs")
+
+    def test_gate_off_writes_nothing(self, tmp_path, monkeypatch):
+        from skills.lib.workflow.persistence.teams_bridge import _capture_raw_payload
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("CLAUDE_SKILL_DEBUG_TEAMS", raising=False)
+        _capture_raw_payload({"hello": "world"}, tmp_path / "skill-runs")
+        assert not self._debug_file(tmp_path).exists()
+
+    def test_gate_on_writes_capture(self, tmp_path, monkeypatch):
+        from skills.lib.workflow.persistence.teams_bridge import _capture_raw_payload
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.setenv("CLAUDE_SKILL_DEBUG_TEAMS", "1")
+        _capture_raw_payload({"hello": "world"}, tmp_path / "skill-runs")
+        f = self._debug_file(tmp_path)
+        assert f.exists() and "world" in f.read_text(encoding="utf-8")
+
+    def test_gate_on_but_oversize_skips(self, tmp_path, monkeypatch):
+        from skills.lib.workflow.persistence.teams_bridge import _capture_raw_payload
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.setenv("CLAUDE_SKILL_DEBUG_TEAMS", "1")
+        f = self._debug_file(tmp_path)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("x" * 100, encoding="utf-8")  # pre-fill past the tiny cap
+        _capture_raw_payload({"hello": "world"}, tmp_path / "skill-runs", cap_bytes=10)
+        # Append skipped: file unchanged, no new record line.
+        assert f.read_text(encoding="utf-8") == "x" * 100

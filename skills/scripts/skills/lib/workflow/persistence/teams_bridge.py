@@ -329,6 +329,10 @@ def ensure_team_run(
         "skill": skill or "agent-teams",
         "team_name": team_name,
         "session_id": session_id,
+        # This is the Agent Teams capture path by definition, so the mode is a
+        # constant here — it must still be recorded (third creation site) so
+        # resume classifies team runs without re-reading the env var (DL-T1-01).
+        "orchestration_mode": "agent_teams",
         "started_at": now_iso,
         "status": "running",
     }
@@ -382,13 +386,40 @@ def _debug_payloads_path(skill_runs_base: Path | str | None) -> Path:
     return base.parent / "skill-runs-debug" / "team-payloads.jsonl"
 
 
-def _capture_raw_payload(payload: dict[str, Any], skill_runs_base: Path | str | None = None) -> None:
+#: Opt-in gate for the raw-payload debug capture. Default OFF (DL-029): the
+#: capture previously ran on every team hook, an unbounded-growth liability.
+#: This is the one INTENTIONAL behavior change in Tier-3 — a future reader must
+#: not "restore" the always-on behavior thinking the gate was a bug.
+CLAUDE_SKILL_DEBUG_TEAMS_ENV: str = "CLAUDE_SKILL_DEBUG_TEAMS"
+
+#: Defense-in-depth size cap: even when the gate is on, skip the append once the
+#: capture file exceeds this size so a forgotten debug session cannot grow it
+#: without bound. Overridable per call for tests.
+CLAUDE_SKILL_DEBUG_TEAMS_CAP_BYTES: int = 50 * 1024 * 1024  # 50 MB
+
+
+def _capture_raw_payload(
+    payload: dict[str, Any],
+    skill_runs_base: Path | str | None = None,
+    *,
+    cap_bytes: int = CLAUDE_SKILL_DEBUG_TEAMS_CAP_BYTES,
+) -> None:
     """Best-effort append the raw payload to the (base-scoped) debug capture file.
 
-    This records the actual TaskCreated/TaskCompleted/TeammateIdle/SubagentStart/
-    SubagentStop payload shapes on the next real teammate run so that the ASSUMED
-    field names above (_PAYLOAD_TEAM_NAME, etc.) can be verified against reality
-    and corrected with a one-line fix.
+    Gated and bounded (DL-029):
+
+    - Writes ONLY when ``CLAUDE_SKILL_DEBUG_TEAMS=1`` (default OFF), mirroring the
+      ``os.environ.get`` idiom in ``team_mode.py``/``resume.py``. The default is
+      intentionally OFF — the previous always-on capture was an unbounded-growth
+      liability with diagnostic value only when a Teams-hook payload bug is being
+      investigated.
+    - Even when enabled, the append is skipped once the target file exceeds
+      ``cap_bytes`` (default 50 MB) so a re-enabled-and-forgotten capture cannot
+      grow without bound.
+
+    When enabled, it records the actual TaskCreated/TaskCompleted/TeammateIdle/
+    SubagentStart/SubagentStop payload shapes so the ASSUMED field names above
+    (_PAYLOAD_TEAM_NAME, etc.) can be verified against reality.
 
     Never raises — a write failure must never fail the hook.
     """
@@ -397,8 +428,14 @@ def _capture_raw_payload(payload: dict[str, Any], skill_runs_base: Path | str | 
     # the self-capture is a production-only field-verification aid.
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return
+    # Opt-in gate (default OFF): absent or non-"1" value means do nothing.
+    if os.environ.get(CLAUDE_SKILL_DEBUG_TEAMS_ENV) != "1":
+        return
     try:
         path = _debug_payloads_path(skill_runs_base)
+        # Size cap: skip the append once the file is already over the cap.
+        if path.exists() and path.stat().st_size > cap_bytes:
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         record = {"ts": time.time(), "payload": payload}
         with open(path, "a", encoding="utf-8") as fh:

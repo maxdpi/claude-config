@@ -223,8 +223,16 @@ def test_fallback_mode_no_task_events(tmp_path):
 
 
 def test_workflow_mode_does_not_enable_team_mode(tmp_path):
-    """With env var unset, team_mode is False regardless of task events."""
+    """Legacy run + env unset: team_mode is False regardless of task events.
+
+    Strips the persisted ``orchestration_mode`` to exercise the C-001 legacy
+    fallback deterministically (the field, when present, would otherwise pin
+    the mode regardless of the live env — that case is covered separately).
+    """
     run = create_run_dir(skill="decision-critic", base_dir=tmp_path)
+    _state = json.loads(run.run_state.read_text())
+    _state.pop("orchestration_mode", None)
+    run.run_state.write_text(json.dumps(_state), encoding="utf-8")
 
     append_event(run, event_schema(
         type=EVENT_TASK_CREATED,

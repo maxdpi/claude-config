@@ -26,6 +26,7 @@ if str(_SCRIPTS) not in sys.path:
 
 from skills.lib.workflow.persistence.registry import list_runs
 from skills.lib.workflow.persistence.retention import prune_runs
+from skills.lib.workflow.persistence.team_mode import select_orchestration_mode
 from skills.lib.workflow.persistence.workflow_bridge import bridge_session_workflows
 
 _INCOMPLETE_STATUSES: frozenset[str] = frozenset({"running", "crashed"})
@@ -58,6 +59,16 @@ def main(payload: dict | None = None) -> int:
     Returns:
         Always 0.
     """
+    # Surface the active orchestration mode first, before any early return.
+    # SessionStart stdout IS added to the context Claude sees (hooks.md:513), so
+    # this resolves the committed-vs-live env incoherence at a point a human and
+    # the model can both observe it. printenv-equivalent: reads the live process
+    # env, not settings.json's committed value (DL-T1-05).
+    if select_orchestration_mode().mode == "agent_teams":
+        print("[skill-runs] mode: agent_teams")
+    else:
+        print("[skill-runs] mode: workflow (subagent fallback)")
+
     # Step 0: bridge any Workflow run-states from previous sessions before checking
     # for incomplete runs. This feeds the resume offer with real phase data.
     session_id: str | None = None

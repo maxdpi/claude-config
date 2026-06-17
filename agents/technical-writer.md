@@ -105,6 +105,8 @@ Do not document what code "should" do -- document what it DOES.
 After editing files, respond with ONLY:
 
 ```
+STATUS: [COMPLETE | BLOCKED | ESCALATED]
+
 Documented: [file:symbol] or [directory/]
 Type: [classification]
 Index: [UPDATED | CREATED | VERIFIED]

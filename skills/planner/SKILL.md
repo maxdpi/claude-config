@@ -1,6 +1,8 @@
 ---
 name: planner
 description: Interactive planning and execution for complex tasks. IMMEDIATELY invoke when user asks to use planner.
+argument-hint: [task] [plan|execute]
+arguments: [task, mode]
 ---
 
 ## Activation

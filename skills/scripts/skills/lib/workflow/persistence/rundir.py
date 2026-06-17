@@ -32,6 +32,7 @@ from pathlib import Path
 
 from .atomic import write_atomic
 from .fold import empty_projection
+from .team_mode import select_orchestration_mode
 
 _CLAUDE_DIR = Path.home() / ".claude"
 _SETTINGS_KEY = "skillRuns.baseDir"
@@ -107,6 +108,58 @@ class RunDir:
 # ---------------------------------------------------------------------------
 
 
+def init_run_dir_files(
+    run_dir: RunDir,
+    *,
+    skill: str | None = None,
+    extra_state: dict | None = None,
+) -> None:
+    """Create the directory tree and write the five initial files for *run_dir*.
+
+    The run id lives on the caller-supplied :class:`RunDir`, so callers that
+    must control the id (e.g. the Workflow bridge, which keeps its deterministic
+    ``wf-{wf_run_id}`` id) reuse this exact initialization sequence without
+    inheriting :func:`create_run_dir`'s random id. ``extra_state`` is merged into
+    the run-state dict after the base fields, so a caller may add its own keys
+    (``wf_run_id``, ``session_id``, …) and may override ``status`` — the
+    deterministic-id and per-caller-metadata invariants both survive the reuse.
+
+    Args:
+        run_dir: The (already-constructed) run directory handle to initialize.
+        skill: Optional skill name recorded in ``run-state.json``.
+        extra_state: Optional extra run-state fields merged after the base set.
+    """
+    # Create directory tree.
+    run_dir.path.mkdir(parents=True, exist_ok=True)
+
+    # run-state.json — static metadata; never rewritten after creation.
+    run_state: dict = {
+        "run_id": run_dir.run_id,
+        "skill": skill,
+        # Orchestration mode is a historical fact decided at creation, not a
+        # property of the live environment — resume reads this back instead of
+        # re-checking the env var, which can change between sessions (DL-T1-01).
+        "orchestration_mode": select_orchestration_mode().mode,
+        "started_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+        "status": "running",
+    }
+    if extra_state:
+        run_state.update(extra_state)
+    write_atomic(run_dir.run_state, run_state)
+
+    # events.jsonl — append-only; start as empty file.
+    run_dir.events_jsonl.touch()
+
+    # projection.json — starts as empty projection.
+    write_atomic(run_dir.projection, empty_projection())
+
+    # manifest.json — empty tag table; populated by manifest.write_phase_manifest.
+    write_atomic(run_dir.manifest, {})
+
+    # .lock — advisory flock target; just needs to exist.
+    run_dir.lockfile.touch()
+
+
 def create_run_dir(
     skill: str | None = None,
     base_dir: Path | str | None = None,
@@ -124,31 +177,6 @@ def create_run_dir(
         properties pointing at the new directory.
     """
     base = Path(base_dir).expanduser() if base_dir else _resolve_base_dir()
-    run_id = _new_run_id()
-    rd = RunDir(run_id=run_id, base=base)
-
-    # Create directory tree.
-    rd.path.mkdir(parents=True, exist_ok=True)
-
-    # run-state.json — static metadata; never rewritten after creation.
-    run_state: dict = {
-        "run_id": run_id,
-        "skill": skill,
-        "started_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
-        "status": "running",
-    }
-    write_atomic(rd.run_state, run_state)
-
-    # events.jsonl — append-only; start as empty file.
-    rd.events_jsonl.touch()
-
-    # projection.json — starts as empty projection.
-    write_atomic(rd.projection, empty_projection())
-
-    # manifest.json — empty tag table; populated by manifest.write_phase_manifest.
-    write_atomic(rd.manifest, {})
-
-    # .lock — advisory flock target; just needs to exist.
-    rd.lockfile.touch()
-
+    rd = RunDir(run_id=_new_run_id(), base=base)
+    init_run_dir_files(rd, skill=skill)
     return rd

@@ -577,6 +577,38 @@ class TestCopyOnStop:
         assert len(copies) >= 1, "transcript.jsonl must be copied on SubagentStop"
         assert copies[0].read_text(encoding="utf-8") == fake_transcript.read_text(encoding="utf-8")
 
+    def test_copy_on_stop_disabled_skips_copy(self, tmp_path: Path, monkeypatch) -> None:
+        """When skillRuns.copyTranscript is false, SubagentStop copies nothing (DL-030)."""
+        rd = create_run_dir(skill="s", base_dir=tmp_path)
+        monkeypatch.setenv("CLAUDE_SKILL_RUN_ID", rd.run_id)
+
+        fake_transcript = tmp_path / "agent-abc.jsonl"
+        fake_transcript.write_text(
+            json.dumps({"agentId": "abc", "sessionId": "s1", "type": "user"}) + "\n",
+            encoding="utf-8",
+        )
+
+        with mock.patch(
+            "skills.lib.workflow.persistence.registry._resolve_base_dir",
+            return_value=tmp_path,
+        ):
+            from skills.hooks import run_event_hook
+            import importlib
+            importlib.reload(run_event_hook)
+            # Disable the copy via the config-flag reader (gates the action only).
+            monkeypatch.setattr(run_event_hook, "_copy_transcript_enabled", lambda: False)
+
+            payload = _make_subagent_stop_payload(
+                agent_id="abc",
+                session_id="s1",
+                transcript_path=str(fake_transcript),
+            )
+            exit_code = run_event_hook.main(payload=payload)
+
+        assert exit_code == 0
+        # No transcript copy should exist anywhere in the run dir tree.
+        assert list(rd.path.rglob("transcript.jsonl")) == []
+
     def test_copy_on_stop_atomic_rename(self, tmp_path: Path, monkeypatch) -> None:
         """Copy-on-stop is atomic: no .tmp-transcript- files left behind."""
         rd = create_run_dir(skill="s", base_dir=tmp_path)

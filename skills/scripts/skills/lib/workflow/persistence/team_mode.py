@@ -25,9 +25,10 @@ and use it from there; do NOT duplicate the logic here (DL-007).
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 OrchestrationMode = Literal["agent_teams", "workflow"]
 
@@ -72,6 +73,30 @@ def select_orchestration_mode() -> ModeDescriptor:
         env_var=AGENT_TEAMS_ENV,
         env_value=env_value,
     )
+
+
+def read_orchestration_mode(run: Any) -> str | None:
+    """Read the mode recorded in a run's ``run-state.json`` at creation time.
+
+    A run's orchestration mode is a historical fact fixed when the run was
+    created (DL-T1-01); resume must prefer this recorded value over the live
+    env var, which can differ from the session that created the run. Co-located
+    here because this module already owns the mode vocabulary (DL-T1-03).
+
+    Args:
+        run: Any object exposing a ``run_state`` Path (``RunHandle`` or
+            ``RunDir`` both qualify).
+
+    Returns:
+        The persisted ``orchestration_mode`` string, or ``None`` when the
+        run-state file or the field is absent (legacy runs created before the
+        field existed) — the caller then falls back to the live env var.
+    """
+    try:
+        data = json.loads(run.run_state.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return data.get("orchestration_mode")
 
 
 def is_agent_teams_available() -> bool:

@@ -49,7 +49,7 @@ from .events import (
 )
 from .manifest import write_phase_manifest
 from .registry import find_run
-from .rundir import RunDir, _resolve_base_dir, create_run_dir
+from .rundir import RunDir, _resolve_base_dir, create_run_dir, init_run_dir_files
 
 log = logging.getLogger(__name__)
 
@@ -303,24 +303,20 @@ def bridge_workflow_run(
             cur.setdefault("completed_at", _now_iso)
             write_atomic(run_dir.run_state, cur)
     else:
+        # Keep the deterministic id; reuse the shared run-dir initialization
+        # (DL-T1-01 mode field included by the helper) and carry the two
+        # bridge-specific run-state fields plus the bridged status through
+        # extra_state so re-bridging stays idempotent on the same id.
         run_dir = RunDir(run_id=run_id, base=base)
-        run_dir.path.mkdir(parents=True, exist_ok=True)
-        run_state_data: dict = {
-            "run_id": run_id,
-            "skill": workflow_name,
+        extra_state: dict = {
             "wf_run_id": wf_run_id,
             "session_id": session_id,
             "started_at": _now_iso,
             "status": bridged_status,
         }
         if bridged_status == "completed":
-            run_state_data["completed_at"] = _now_iso
-        write_atomic(run_dir.run_state, run_state_data)
-        run_dir.events_jsonl.touch()
-        from .fold import empty_projection
-        write_atomic(run_dir.projection, empty_projection())
-        write_atomic(run_dir.manifest, {})
-        run_dir.lockfile.touch()
+            extra_state["completed_at"] = _now_iso
+        init_run_dir_files(run_dir, skill=workflow_name, extra_state=extra_state)
 
     # ── Extract phaseTrust from .mjs meta ────────────────────────────────────
     mjs_path = _find_mjs(workflow_name)

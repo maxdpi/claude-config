@@ -41,11 +41,12 @@
     "confidence": "medium"
   },
   "send_message": {
-    "available": true,
-    "evidence": "the Agent tool result explicitly offered: \"use SendMessage with to: 'ab73a631269d58310' to continue this agent\"",
-    "agent_teams_env_gate": "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is UNSET in this environment; SendMessage to continue a spawned subagent is nonetheless available. The env gate governs the teammate/team path, not subagent continuation.",
-    "min_cli_version_note": "SendMessage and the workflow/teams features track recent Claude Code CLI builds; pin a min-CLI-version when the substrate hard-depends on it. Not separately measured here.",
-    "confidence": "high (subagent continuation), medium (teammate path, feature disabled here)"
+    "available": null,
+    "superseded_by": "send_message_gate_probe_result.json",
+    "superseded_reason": "DL-031: the original 'available:true' claim rested only on a result-string scrape (the Agent-tool result text mentioning SendMessage), which is advertisement, not an invocation outcome. That weak-evidence claim is withdrawn here.",
+    "resolved_verdict": "INCONCLUSIVE_NONINTERACTIVE -> defer to the official doc (SendMessage gated behind CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)",
+    "authoritative_citation": "docs/claude_code docs/build/sub-agents.md:653",
+    "note": "Operational risk is LOW: the substrate does not depend on SendMessage (DL-009 resume re-invokes the entry point). See send_message_gate_probe_result.json for the per-trial record and interactive re-test instructions."
   },
   "permission_mode": {
     "values": ["plan", "default", "acceptEdits", "bypassPermissions", "auto"],

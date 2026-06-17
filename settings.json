@@ -1,17 +1,17 @@
 {
-  "//": "skill-runs substrate config: skillRuns.baseDir (DL-001/C-003), skillRuns.retentionDays (DL-005), CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS (DL-009). Spawn restriction (DL-015, M-008b): Python dispatch-prose guards removed; spawn surface now constrained by native primitives only — Agent(type) allowlists in each orchestrator/lead definition's tools field; permissions.deny:[\"Agent(<name>)\"] here for disabled agents; headless: set CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1.",
+  "//": "skill-runs substrate config: skillRuns.baseDir (DL-001/C-003), skillRuns.retentionDays (DL-005), skillRuns.copyTranscript (DL-030: copy native subagent transcript into the run dir on SubagentStop; default true is behavior-preserving — set false to rely solely on native transcripts via cleanupPeriodDays, a NATIVE-FIRST/DL-015 opt-out), CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS (DL-009), CLAUDE_SKILL_DEBUG_TEAMS=1 (DL-029: opt-in, default off — append raw Teams-hook payloads to skill-runs-debug/team-payloads.jsonl for field verification; bounded by a 50 MB cap). Spawn restriction (DL-015, M-008b): Python dispatch-prose guards removed; spawn surface now constrained by native primitives only — Agent(type) allowlists in each orchestrator/lead definition's tools field; permissions.deny:[\"Agent(<name>)\"] here for disabled agents; headless: set CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1.",
   "theme": "dark",
   "permissions": {
     "defaultMode": "auto"
   },
   "skillRuns": {
     "baseDir": "~/.claude/skill-runs",
-    "retentionDays": 7
+    "retentionDays": 7,
+    "copyTranscript": true
   },
   "cleanupPeriodDays": 30,
   "env": {
-    "//CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "Set to '1' to enable Agent Teams mode (experimental). When unset or empty, skills degrade gracefully: Workflow tool + Agent-tool subagents are used instead. Resume semantics are identical in both modes (DL-009).",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": ""
+    "//CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "Set to '1' to enable Agent Teams mode (experimental). When unset or empty, skills degrade gracefully: Workflow tool + Agent-tool subagents are used instead. Resume semantics are identical in both modes (DL-009). The active key is intentionally omitted: select_orchestration_mode() treats empty-string identically to absent, so committing an empty value only misrepresented the live runtime mode (DL-T1-04)."
   },
   "hooks": {
     "SessionStart": [

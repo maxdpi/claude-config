@@ -1,0 +1,34 @@
+{
+  "probe": "send_message_gate",
+  "assumption": "A4",
+  "decision_log": "DL-031",
+  "captured_at": "2026-06-17T04:05:13Z",
+  "agent_teams_env_at_capture": "1",
+  "interactive_session": false,
+  "trials": [
+    {
+      "agent_teams_env": "<unset>",
+      "expected_per_doc": "SendMessage NOT available",
+      "observed_outcome": "not invocable from a non-interactive Python probe; no real invocation attempt could be made"
+    },
+    {
+      "agent_teams_env": "1",
+      "expected_per_doc": "SendMessage available",
+      "observed_outcome": "not invocable from a non-interactive Python probe; no real invocation attempt could be made"
+    }
+  ],
+  "verdict": "INCONCLUSIVE_NONINTERACTIVE",
+  "verdict_enum": [
+    "GATED_BY_TEAMS",
+    "RUNTIME_DIVERGENCE",
+    "INCONCLUSIVE_NONINTERACTIVE"
+  ],
+  "authoritative_prior": {
+    "citation": "docs/claude_code docs/build/sub-agents.md:653",
+    "statement": "The SendMessage tool is only available when agent teams are enabled via CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1."
+  },
+  "resolution": "INCONCLUSIVE_NONINTERACTIVE: a real invocation spike requires an interactive Agent Teams session and could not be performed from this non-interactive context. Per DL-031/A-DOC-AUTHORITATIVE, defer to the official doc (gated behind Teams). The prior result-string-scrape claim of 'available:true' with Teams UNSET is NOT reproduced here: it was advertisement, not an invocation outcome. Interactive re-test is required to claim any runtime divergence.",
+  "operational_risk": "LOW: the substrate does not depend on SendMessage. DL-009 resume re-invokes the entry point; SendMessage is not adopted as a resume mechanism. This gate only matters if the substrate ever delegates session-scoped resume to native SendMessage.",
+  "supersedes": "subagent_transcript_probe_result.json#send_message (result-string evidence)",
+  "live_probe_instructions": "Interactive re-test: in a Claude session, (1) with CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS unset, spawn a subagent and attempt SendMessage(to=<agentId>); record success vs error class. (2) Repeat with the env set to 1. Fill trials[].observed_outcome and set verdict to GATED_BY_TEAMS or RUNTIME_DIVERGENCE accordingly."
+}

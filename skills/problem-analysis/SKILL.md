@@ -1,6 +1,8 @@
 ---
 name: problem-analysis
 description: Invoke IMMEDIATELY to identify root causes via competing hypotheses and iterative investigation. You (the lead) orchestrate it — gate and hypothesize yourself, dispatch investigator workers to gather evidence, then formulate the root cause. Do NOT explore first; run the workflow.
+argument-hint: [problem description]
+allowed-tools: Read Glob Grep Bash(printenv *)
 ---
 
 # Problem Analysis
@@ -19,7 +21,15 @@ is identified with supporting evidence. Solution discovery is downstream.
 The investigator workers (step 3 iterative investigation) challenge the hypothesis
 space independently. Pick the dispatch mechanism by environment:
 
-> **Check first (do this — do not assume):** run `printenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If it prints `1`, Agent Teams is ON → spawn **teammates**. If it is empty/unset → spawn **Agent-tool subagents**. The setting lives in `~/.claude/settings.json` `env`; the model cannot see it without checking.
+!`printenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS | grep -q 1 && echo "AGENT_TEAMS=ON — spawn workers as teammates" || echo "AGENT_TEAMS=OFF — spawn workers as Agent-tool subagents"`
+
+The line above is resolved **once at skill load** from the live process env, which
+is authoritative — not `settings.json`'s committed value — so it reports the real
+active mode without the model having to evaluate an env var it cannot observe. If it
+instead reads `[shell command execution disabled by policy]`, default to OFF
+(Agent-tool subagents). Scope note: this injection and the `allowed-tools` frontmatter
+apply to the lead / Agent-tool path; both are **inert on the Agent Teams teammate
+path**, where only `tools`/`model`/body apply.
 
 - **Agent Teams enabled** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): spawn
   **N investigator teammates** in parallel — "Spawn a teammate using the `developer`

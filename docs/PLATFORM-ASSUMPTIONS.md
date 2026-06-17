@@ -157,12 +157,18 @@ sessionKind, userType, entrypoint, cwd, sessionId, version, gitBranch`. Record
 governs `~/.claude/projects` transcript retention; subagent transcripts live under
 that tree). Retention (M-002) must reconcile against this default.
 
-**`SendMessage`:** available — the Agent tool result offered
-`"use SendMessage with to: 'ab73a631269d58310' to continue this agent"` even with
-Agent Teams **disabled**. The `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` gate governs
-the **teammate/team** path, not subagent continuation. *Presence is
-necessary-but-not-sufficient — pin a min-CLI-version when the substrate hard-depends
-on it.*
+**`SendMessage`:** gated behind Agent Teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
+per the official doc — `docs/claude_code docs/build/sub-agents.md:653`: *"The
+`SendMessage` tool is only available when agent teams are enabled via
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`."* The earlier claim that SendMessage was
+"available" with Teams disabled rested only on a **result-string scrape** (the Agent
+tool result *mentioning* SendMessage) — advertisement, not an invocation outcome —
+and is **withdrawn** (DL-031). A real invocation spike requires an interactive Agent
+Teams session; the gate probe (`send_message_gate_probe_result.json`) records
+`INCONCLUSIVE_NONINTERACTIVE` and defers to the official doc as authoritative.
+**Interactive re-test is required** to claim any runtime divergence. Operational risk
+is **LOW**: the substrate does not depend on `SendMessage` (DL-009 resume re-invokes
+the entry point; SendMessage is not adopted as a resume mechanism).
 
 **`permissionMode` (values `plan` / `default` / `acceptEdits` / `bypassPermissions`
 / `auto`):** a direct `permissionMode: "plan"` spawn was **not exercisable** from the
@@ -187,6 +193,18 @@ still requires the substrate** (DL-001).
 **Fallback when the transcript path is not found (DL-020):** if the path cannot be
 resolved from the run's stored `session_id` + `native_agent_id`, `is_resumable()`
 returns **False** (assume cleaned) — never a `started_at` proxy.
+
+**Teammate `memory:` (DL-023) — live re-run conditions.** The `teammate_memory`
+probe was re-run with Agent Teams now exposed in the live runtime
+(`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set). Verdict moved from
+`UNVERIFIABLE_TEAMS_DISABLED` to **`PENDING_LIVE_PROBE`**: the env gate is satisfied,
+but a non-interactive process cannot drive a real teammate with `memory: project`
+across two runs to observe carry-over. `honored` is **not** forced true (R-3);
+default-deny (curated-`.md` fallback) stays in force until an interactive `--live`
+probe records `honored=true`. Run conditions: env var **set**; session id / CLI
+version **not captured** by the non-interactive probe (re-capture them in the
+interactive `--live` re-test). Record of evidence:
+`probe/teammate_memory_probe_result.json`.
 
 ---
 

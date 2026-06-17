@@ -1,6 +1,8 @@
 ---
 name: deepthink
 description: Invoke IMMEDIATELY to run structured divergent reasoning on an open-ended analytical question. You (the lead) orchestrate it — clarify context, design sub-questions, dispatch divergent-reasoner workers, then synthesize a confidence-rated answer. Do NOT explore first; run the workflow.
+argument-hint: [question]
+allowed-tools: Read Glob Grep Bash(printenv *)
 ---
 
 # DeepThink
@@ -15,7 +17,15 @@ phase, aggregate their outputs, and synthesize a confidence-rated answer.
 The divergent-reasoner workers (step 9 fan-out, Full mode only) run in parallel.
 Pick the dispatch mechanism by environment:
 
-> **Check first (do this — do not assume):** run `printenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. If it prints `1`, Agent Teams is ON → spawn **teammates**. If it is empty/unset → spawn **Agent-tool subagents**. The setting lives in `~/.claude/settings.json` `env`; the model cannot see it without checking.
+!`printenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS | grep -q 1 && echo "AGENT_TEAMS=ON — spawn workers as teammates" || echo "AGENT_TEAMS=OFF — spawn workers as Agent-tool subagents"`
+
+The line above is resolved **once at skill load** from the live process env, which
+is authoritative — not `settings.json`'s committed value — so it reports the real
+active mode without the model having to evaluate an env var it cannot observe. If it
+instead reads `[shell command execution disabled by policy]`, default to OFF
+(Agent-tool subagents). Scope note: this injection and the `allowed-tools` frontmatter
+apply to the lead / Agent-tool path; both are **inert on the Agent Teams teammate
+path**, where only `tools`/`model`/body apply.
 
 - **Agent Teams enabled** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): spawn them as
   **teammates** — "Spawn a teammate using the `developer` agent type as
@@ -46,99 +56,13 @@ Either way: the worker role is the registered subagent type `developer`
 
 ## DeepThink — 14-Step Methodology
 
-**Research grounding:** System 2 Attention (S2A) bias removal; structured
-divergent-reasoning fan-out with aggregation and iterative refinement.
-
-**MAX_ITERATIONS for step 13:** 5.
-
-### Step 1 — Context Clarification  *(lead)*
-
-You are an expert analytical reasoner tasked with systematic deep analysis.
-
-PART 0 — CONTEXT SUFFICIENCY:
-Before analyzing, assess whether you have sufficient context:
-- A. EXISTING CONTEXT: What relevant information is already in this conversation?
-- B. SUFFICIENCY JUDGMENT: SUFFICIENT / PARTIAL / INSUFFICIENT
-- C. IF NOT SUFFICIENT: Use Read/Glob/Grep to gather necessary context; stop when enough.
-
-PART A — CLARIFIED QUESTION: Restate the core question in neutral, objective terms.
-PART B — EXTRACTED CONTEXT: List factual context relevant to answering.
-PART C — NOTED BIASES: Identify framing effects and embedded assumptions.
-
-### Step 2 — Abstraction  *(lead)*
-Identify: DOMAIN, FIRST PRINCIPLES (underlying laws), KEY CONCEPTS (2–4 central ideas).
-
-### Step 3 — Characterization  *(lead)*
-Determine QUESTION TYPE (causal / comparative / design / predictive / evaluative).
-Determine ANSWER STRUCTURE (argument / explanation / recommendation / analysis).
-Determine MODE: Full (complex, multi-perspective) or Quick (straightforward).
-
-### Step 4 — Analogical Recall  *(lead)*
-- DIRECT ANALOGIES: Same domain instances with known outcomes.
-- CROSS-DOMAIN ANALOGIES: Structurally similar problems in other fields.
-- ANTI-PATTERNS: Approaches that failed; extract why.
-
-### Step 5 — Planning  *(lead)*
-Decompose into SUB-QUESTIONS (2–4 targeted questions).
-Define SUCCESS CRITERIA (what a complete answer must cover).
-
-### Step 6 — Sub-Agent Design  *(lead — Full mode only)*
-Generate distinct sub-agent task definitions. Each task must:
-- Address a distinct sub-question from step 5
-- Have non-overlapping scope from other tasks
-- Specify exactly what to research and what output format to produce
-
-### Step 7 — Design Critique  *(lead — Full mode only)*
-Evaluate the sub-agent design for:
-- COVERAGE: Does the task set span all sub-questions?
-- OVERLAP: Do any tasks duplicate effort?
-- APPROPRIATENESS: Is complexity matched to the question?
-
-### Step 8 — Design Revision  *(lead — Full mode only)*
-Revise sub-agent tasks based on step 7 critique. Confirm final task definitions.
-
-### Step 9 — Dispatch  *(divergent-reasoner workers — developer — Full mode only)*
-Each `divergent-reasoner` worker executes ONE assigned sub-question task.
-Use Read/Glob/Grep to gather evidence. Produce structured findings.
-DO NOT coordinate with other divergent-reasoner workers.
-
-### Step 10 — Quality Gate  *(lead — Full mode only)*
-Review each worker output. Filter low-quality outputs.
-Mark each: ACCEPTED / REJECTED (with reason) / PARTIAL (note gap).
-
-### Step 11 — Aggregation  *(lead — Full mode only)*
-Produce AGREEMENT MAP (claims all workers support) and
-DISAGREEMENT MAP (claims workers contradict; note the conflict).
-
-### Step 12 — Initial Synthesis  *(lead)*
-Integrate all findings (or step 5 planning if Quick mode) into a first-pass answer.
-Address each sub-question. Identify remaining gaps.
-
-### Step 13 — Iterative Refinement  *(lead — up to 5 iterations)*
-Loop until CONFIDENT or MAX_ITERATIONS reached:
-- Identify the weakest claim or biggest gap in step 12
-- Research or reason further to address it
-- Update the synthesis
-
-CONFIDENCE levels: exploring / low / medium / high / certain.
-Proceed to step 14 when HIGH or CERTAIN, or at iteration cap.
-
-### Step 14 — Formatting and Output  *(lead)*
-```
-ANSWER:
-[direct response to the clarified question]
-
-REASONING:
-[step-by-step chain of logic, citing evidence]
-
-CONFIDENCE: [HIGH / MEDIUM / LOW]
-  Evidence (specific citations): [YES / PARTIAL / NO]
-  Alternatives considered:       [YES / PARTIAL / NO]
-  Explanation complete:          [YES / PARTIAL / NO]
-
-REMAINING UNCERTAINTIES:
-- [what wasn't resolved]
-```
+At Step 1, the lead loads `skills/deepthink/methodology.md` and follows the 14-step
+methodology defined there. It is kept in a separate file (loaded just-in-time)
+rather than inline so this entry point stays small in always-on context; the lead
+reads the full file once, and dispatch prompts to divergent-reasoner workers carry
+only the relevant per-step task text (workers do not need the whole methodology
+block). Mode selection (Full/Quick), dispatch topology, and the roster above remain
+in this file.
 
 ## Cross-run knowledge
 

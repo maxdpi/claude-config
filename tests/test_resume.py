@@ -430,8 +430,17 @@ class TestComputeRemainingTasksCore:
         assert len(result["respawn_descriptor"]["note"]) > 0
 
     def test_team_mode_requires_agent_teams_env_and_task_events(self, run_dir, monkeypatch):
-        """team_mode is True only when CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is set."""
+        """Legacy run (no persisted mode): team_mode follows the live env var.
+
+        This is the C-001 additive-migration fallback: run-state files created
+        before ``orchestration_mode`` existed lack the field, so resume reads
+        the live env var (DL-T1-02). Strip the field to simulate a legacy run
+        deterministically, independent of the ambient env at fixture creation.
+        """
         _task_created(run_dir, "t-1")
+        _state = json.loads(run_dir.run_state.read_text())
+        _state.pop("orchestration_mode", None)
+        run_dir.run_state.write_text(json.dumps(_state), encoding="utf-8")
 
         # Without env var.
         monkeypatch.delenv("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", raising=False)

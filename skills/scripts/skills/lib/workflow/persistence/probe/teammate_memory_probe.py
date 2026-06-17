@@ -154,15 +154,30 @@ def _build_pending_result(env_value: str) -> dict:
         "agent_teams_env_value": env_value,
         "honored": None,
         "verdict": "PENDING_LIVE_PROBE",
+        "live_attempt": (
+            "Re-run with CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS set (the live runtime "
+            "exposes Teams). The env gate is now satisfied, so the verdict is no "
+            "longer UNVERIFIABLE_TEAMS_DISABLED."
+        ),
+        "blocker": (
+            "A non-interactive Python process cannot drive a real Agent Teams "
+            "teammate with memory: project across two runs and observe whether run "
+            "2 sees run 1's token — that requires the native Agent Teams runtime in "
+            "an interactive session. honored is NOT forced true (R-3); default-deny "
+            "stays in force."
+        ),
         "fallback_selected": DEFAULT_DENY_FALLBACK,
         "fallback_description": (
-            "Agent Teams is enabled but a live teammate-memory probe has not yet "
-            "been executed. Default-deny: curated-.md fallback is selected until "
-            "a live probe records honored=True."
+            "Agent Teams is enabled but a programmatic live teammate-memory probe "
+            "cannot be driven from this non-interactive context. Default-deny: the "
+            "curated-.md fallback is selected until an interactive --live probe "
+            "records honored=True."
         ),
         "live_probe_instructions": (
-            "Run: python3 teammate_memory_probe.py --live to drive a real teammate "
-            "with memory: project across two runs and record the result."
+            "Interactive re-test: with CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS set, run "
+            "python3 teammate_memory_probe.py --live and drive a real teammate with "
+            "memory: project across two runs, recording whether run 2 observes run "
+            "1's accumulated knowledge."
         ),
     }
 

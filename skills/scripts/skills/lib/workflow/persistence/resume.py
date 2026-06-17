@@ -39,6 +39,7 @@ from .events import EVENT_TASK_COMPLETED, EVENT_TASK_CREATED
 from .manifest import read_manifest
 from .registry import RunHandle
 from .rundir import RunDir
+from .team_mode import read_orchestration_mode
 
 # ---------------------------------------------------------------------------
 # Parent permission mode detection (DL-021)
@@ -303,7 +304,15 @@ def compute_remaining_tasks(run: RunHandle | RunDir) -> dict[str, Any]:
             When ``incomplete_tasks`` is empty the descriptor's ``tasks``
             list is empty and the note explains no respawn is needed.
     """
-    agent_teams_enabled = bool(os.environ.get(_AGENT_TEAMS_ENV, "").strip())
+    # Prefer the mode recorded at run creation: a run's mode is a historical
+    # fact, and the live env var can differ from the session that created it
+    # (DL-T1-02). Fall back to the live env var only for legacy runs whose
+    # run-state predates the persisted field (C-001 additive-migration).
+    persisted_mode = read_orchestration_mode(run)
+    if persisted_mode is not None:
+        agent_teams_enabled = persisted_mode == "agent_teams"
+    else:
+        agent_teams_enabled = bool(os.environ.get(_AGENT_TEAMS_ENV, "").strip())
 
     created: dict[str, dict[str, Any]] = {}
     completed_ids: set[str] = set()

@@ -60,9 +60,30 @@ from skills.lib.workflow.persistence.teams_bridge import (
     _TEAM_HOOK_TYPES,
     extract_team_name,
 )
+from skills.lib.workflow.persistence.resume import _CLAUDE_DIR, _read_settings_file
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+
+
+def _copy_transcript_enabled() -> bool:
+    """Whether copy-on-stop is enabled (``skillRuns.copyTranscript``, default True).
+
+    Read via the same settings idiom ``resume.py`` uses (``settings.local.json``
+    takes precedence over ``settings.json``). Copy-on-stop is a conscious
+    DL-015 (NATIVE-FIRST) exception kept ENABLED by default (DL-030): the
+    runtime persists native transcripts for ``cleanupPeriodDays`` (default 30),
+    but DL-020's resume age-guard needs a transcript path that RESOLVES at resume
+    time, and the native path is session/worktree-relative and may be reaped
+    early or unresolvable. The run-local copy is that stable fallback anchor.
+    NATIVE-FIRST purists can set ``copyTranscript: false`` to opt out. The flag
+    gates the copy ACTION only — it does not change which field is read.
+    """
+    for name in ("settings.local.json", "settings.json"):
+        skill_runs = _read_settings_file(_CLAUDE_DIR / name).get("skillRuns")
+        if isinstance(skill_runs, dict) and "copyTranscript" in skill_runs:
+            return bool(skill_runs["copyTranscript"])
+    return True  # behavior-preserving default (C-001)
 
 _QUARANTINE_PATH: Path = _resolve_base_dir().parent / "skill-run-quarantine.jsonl"
 
@@ -300,8 +321,9 @@ def main(payload: dict | None = None) -> int:
     run_dir = handle.as_run_dir()
     append_event(run_dir, event)
 
-    # Copy-on-stop for SubagentStop events (DL-016).
-    if hook_type == "SubagentStop":
+    # Copy-on-stop for SubagentStop events (DL-016), gated by the conscious
+    # DL-015 exception flag skillRuns.copyTranscript (default true, DL-030).
+    if hook_type == "SubagentStop" and _copy_transcript_enabled():
         _copy_native_transcript(payload, handle.path)
 
     return 0

@@ -1,13 +1,14 @@
 {
   "probe": "teammate_memory",
   "assumption": "DL-023",
-  "captured_at": "2026-06-16T20:18:22Z",
-  "agent_teams_env_set": false,
-  "agent_teams_env_value": "<unset>",
+  "captured_at": "2026-06-17T04:07:31Z",
+  "agent_teams_env_set": true,
+  "agent_teams_env_value": "1",
   "honored": null,
-  "verdict": "UNVERIFIABLE_TEAMS_DISABLED",
+  "verdict": "PENDING_LIVE_PROBE",
+  "live_attempt": "Re-run with CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS set (the live runtime exposes Teams). The env gate is now satisfied, so the verdict is no longer UNVERIFIABLE_TEAMS_DISABLED.",
+  "blocker": "A non-interactive Python process cannot drive a real Agent Teams teammate with memory: project across two runs and observe whether run 2 sees run 1's token \u2014 that requires the native Agent Teams runtime in an interactive session. honored is NOT forced true (R-3); default-deny stays in force.",
   "fallback_selected": "curated_md_artifact",
-  "fallback_description": "memory: frontmatter applicability on the teammate path cannot be verified because CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is unset. Default-deny: cross-run knowledge is routed through a substrate-owned curated .md artifact (koan-curation pattern). The lead reads the artifact at run start and writes it at run end. Curated knowledge stays in the artifact; run/phase state stays in the durable substrate (DL-018 boundary). They do not overlap.",
-  "live_probe_instructions": "To run a live probe when Agent Teams IS enabled: set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1, then run: python3 teammate_memory_probe.py --live. The probe will drive a teammate with memory: project across two runs and record whether run 2 observes run 1's accumulated knowledge.",
-  "dl023_gate": "M-007 memory-dependent behavior is gated on this result. Until honored=True is recorded by a live probe, the curated-.md fallback is always selected (default-deny per DL-023)."
+  "fallback_description": "Agent Teams is enabled but a programmatic live teammate-memory probe cannot be driven from this non-interactive context. Default-deny: the curated-.md fallback is selected until an interactive --live probe records honored=True.",
+  "live_probe_instructions": "Interactive re-test: with CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS set, run python3 teammate_memory_probe.py --live and drive a real teammate with memory: project across two runs, recording whether run 2 observes run 1's accumulated knowledge."
 }
