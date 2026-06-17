@@ -37,7 +37,7 @@ from typing import Any
 
 from .events import EVENT_TASK_COMPLETED, EVENT_TASK_CREATED
 from .manifest import read_manifest
-from .paths import claude_dir, read_settings_file
+from .paths import claude_dir, read_settings_file, read_settings_merged
 from .registry import RunHandle
 from .rundir import RunDir
 from .team_mode import AGENT_TEAMS_ENV, read_orchestration_mode
@@ -83,14 +83,15 @@ def detect_parent_permission_mode() -> str:
         if val:
             return val
 
-    # 2. settings.local.json takes precedence over settings.json.
-    for name in ("settings.local.json", "settings.json"):
-        data = read_settings_file(_CLAUDE_DIR / name)
-        # The probe (PLATFORM-ASSUMPTIONS.md A4) found the key at
-        # permissions.defaultMode in settings.json.
-        mode = (data.get("permissions") or {}).get("defaultMode", "")
-        if mode:
-            return mode
+    # 2. settings.local.json takes precedence over settings.json (deep-merged
+    #    by the canonical read_settings_merged so local's permissions.allow does
+    #    not shadow a permissions.defaultMode set only in settings.json).
+    data = read_settings_merged(_CLAUDE_DIR)
+    # The probe (PLATFORM-ASSUMPTIONS.md A4) found the key at
+    # permissions.defaultMode in settings.json.
+    mode = (data.get("permissions") or {}).get("defaultMode", "")
+    if mode:
+        return mode
 
     # 3. Unknown -> default to "auto" (overriding, safe-deny).
     return "auto"

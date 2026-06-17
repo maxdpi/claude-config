@@ -1,6 +1,6 @@
 # workflow/
 
-Workflow orchestration framework: types, discovery, and AST-based XML generation.
+Workflow orchestration framework: types, discovery, and the durable persistence substrate.
 
 ## Architecture
 
@@ -26,10 +26,11 @@ Workflow/StepDef are metadata containers for introspection. The execution engine
 
 ## Subdirectories
 
-| Directory     | What                            | When to read                   |
-| ------------- | ------------------------------- | ------------------------------ |
-| `ast/`        | AST nodes, builder, renderer    | XML generation for step output |
-| `formatters/` | Re-exports from ast/ for compat | Use ast/ directly instead      |
+| Directory       | What                                                            | When to read                                        |
+| --------------- | --------------------------------------------------------------- | --------------------------------------------------- |
+| `persistence/`  | Durable event-sourcing substrate for skill runs                 | Run dirs, event log, projection, resume, retention  |
+| `prompts/`      | Step prompt wrappers for the remaining Python-CLI skills         | Editing CLI-skill step output                        |
+| `formatters/`   | Legacy no-export stub; deletion gated on parity R-004 (DL-008)  | Removing the Python-CLI step layer (M-008b)          |
 
 ## Test
 

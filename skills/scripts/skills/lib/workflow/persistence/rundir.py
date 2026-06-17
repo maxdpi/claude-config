@@ -46,11 +46,10 @@ def _resolve_base_dir() -> Path:
     default ``~/.claude/skill-runs`` is used silently; a malformed file is
     logged at WARNING by ``paths.read_settings_file`` (I1) before falling back.
     """
-    for name in ("settings.local.json", "settings.json"):
-        data = paths.read_settings_file(_CLAUDE_DIR / name)
-        val = data.get("skillRuns", {}).get("baseDir")
-        if val:
-            return Path(val).expanduser()
+    data = paths.read_settings_merged(_CLAUDE_DIR)
+    val = data.get("skillRuns", {}).get("baseDir")
+    if val:
+        return Path(val).expanduser()
     return _DEFAULT_BASE
 
 

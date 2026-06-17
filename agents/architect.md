@@ -2,6 +2,7 @@
 name: architect
 description: Understands architecture, project conventions, and quality designs
 model: claude-opus-4-8
+effort: high
 color: purple
 permissionMode: plan
 tools: Read, Grep, Glob, Bash
@@ -13,6 +14,12 @@ tools: Read, Grep, Glob, Bash
 > and it omits `Agent` so this agent cannot spawn subagents (leaf-agent rule,
 > settings.json spawn-restriction note). The architect designs and returns plan
 > artifacts as text; it never writes to disk, so Write/Edit are intentionally absent.
+>
+> `effort: high` matches reasoning depth to the role: the architect produces
+> design/plan artifacts where thoroughness dominates latency, so it overrides the
+> session effort upward (sub-agents.md frontmatter — `effort`). It is the one agent
+> tuned this way; fan-out workers (e.g. researcher) inherit session effort so the
+> orchestrating skill controls cost across parallel spawns.
 >
 > `permissionMode: plan` is kept as a defense-in-depth declaration but is **inert
 > under this repo's `auto` defaultMode** (a subagent inherits the parent's auto mode

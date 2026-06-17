@@ -58,13 +58,12 @@ _PRUNABLE_STATUSES: frozenset[str] = frozenset({"done", "tombstoned", "completed
 
 
 def _read_settings() -> dict[str, Any]:
-    """Merge ``settings.json`` and ``settings.local.json`` (local takes precedence)."""
-    merged: dict[str, Any] = {}
-    for name in ("settings.json", "settings.local.json"):
-        # read_settings_file returns {} on absence and logs corruption (I1/I5);
-        # local file applied last so it takes precedence.
-        merged.update(paths.read_settings_file(_CLAUDE_DIR / name))
-    return merged
+    """Merge ``settings.json`` and ``settings.local.json`` (local takes precedence).
+
+    Thin wrapper over the canonical ``paths.read_settings_merged`` — the single
+    source of settings-precedence truth (deep merge, local-over-base).
+    """
+    return paths.read_settings_merged(_CLAUDE_DIR)
 
 
 def _retention_days(settings: dict[str, Any] | None = None) -> int:

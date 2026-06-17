@@ -1,7 +1,14 @@
 {
   "//": "skill-runs substrate config: skillRuns.baseDir (DL-001/C-003), skillRuns.retentionDays (DL-005), skillRuns.copyTranscript (DL-030: copy native subagent transcript into the run dir on SubagentStop; default true is behavior-preserving — set false to rely solely on native transcripts via cleanupPeriodDays, a NATIVE-FIRST/DL-015 opt-out), CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS (DL-009), CLAUDE_SKILL_DEBUG_TEAMS=1 (DL-029: opt-in, default off — append raw Teams-hook payloads to skill-runs-debug/team-payloads.jsonl for field verification; bounded by a 50 MB cap). Spawn restriction (DL-015, M-008b): Python dispatch-prose guards removed; spawn surface now constrained by native primitives only — Agent(type) allowlists in each orchestrator/lead definition's tools field; on the leaf side every agents/*.md worker carries disallowedTools:Agent (architect additionally a read-only tools:[Read,Grep,Glob,Bash] allowlist) so a spawned worker cannot itself spawn on either the Agent-tool or Agent Teams path (sub-agents.md:158), guarded by tests/test_static_integrity.py::TestAgentToolConstraints; permissions.deny:[\"Agent(<name>)\"] here for disabled agents; headless: set CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1.",
   "theme": "dark",
+  "statusLine": {
+    "//": "Run-aware status line: model + cwd, plus a '◇ N active (skill ·M⚡)' segment when the durable substrate has running skill runs. Dependency-free, bounded scan, never errors (skills/scripts/statusline.py). Synced to ~/.claude/skills/scripts/ by sync.sh.",
+    "type": "command",
+    "command": "python3 ~/.claude/skills/scripts/statusline.py",
+    "padding": 1
+  },
   "permissions": {
+    "//": "defaultMode 'auto' routes tool calls through the classifier, which already blocks irreversible/destructive actions (e.g. git push --force, git reset --hard) and anything aimed outside the environment. No permissions.deny git rules are added: prefix-matched Bash globs are leaky (miss trailing-flag forms) and redundant with the classifier. Tighten via autoMode.soft_deny prose rules if a specific destructive pattern slips through.",
     "defaultMode": "auto"
   },
   "skillRuns": {
@@ -11,7 +18,8 @@
   },
   "cleanupPeriodDays": 30,
   "env": {
-    "//CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "Set to '1' to enable Agent Teams mode (experimental). When unset or empty, skills degrade gracefully: Workflow tool + Agent-tool subagents are used instead. Resume semantics are identical in both modes (DL-009). The active key is intentionally omitted: select_orchestration_mode() treats empty-string identically to absent, so committing an empty value only misrepresented the live runtime mode (DL-T1-04)."
+    "//CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "Enables Agent Teams mode (experimental). When unset/empty, skills degrade gracefully to Workflow tool + Agent-tool subagents with IDENTICAL resume semantics (DL-009). Now committed as '1' to activate teammate coordination (messaging, shared task list, inter-agent debate) for the adversarial skills (decision-critic, deepthink, problem-analysis). This supersedes DL-T1-04, which only warned against committing an EMPTY value (treated as absent by select_orchestration_mode(), so it misrepresented the runtime); a concrete '1' accurately represents enabled mode. To revert to the subagent fallback, set to '0' or remove the key below.",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "hooks": {
     "SessionStart": [
