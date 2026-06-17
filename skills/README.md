@@ -48,25 +48,24 @@ auto-replays (DL-014).
 
 ### Agent Teams — adversarial skills
 
-Entry point: `skills/<name>/team.md`
+Entry point: `skills/<name>/SKILL.md`
 
-Gated on `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. When the env var is unset, the
-skill falls back to a Workflow tool + Agent-tool subagent path that produces
-identical durable events (DL-009).
+There is **no `team.md` construct**. The lead (the main session) reads
+`SKILL.md` and orchestrates workers in natural language, referencing registered
+agent types under `agents/` (e.g. `researcher`, `quality-reviewer`, `architect`).
 
-`team.md` files carry YAML frontmatter (`skills:`, `tools:`, `model:`) and a
-body embedded as the team definition. The body IS applied to teammates on the
-Agent Teams path; `skills:` in frontmatter is a fallback-path mechanism only
-(DL-023).
+Gated on `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`. When the env var is set, the
+lead spawns workers as Agent Teams teammates; when unset, it spawns them as
+Agent-tool subagents (`Agent(subagent_type=...)`). Both paths emit identical
+durable events (TaskCreated / TaskCompleted via M-003 hooks) so resume works
+across both (DL-007/DL-009). The `skills:` frontmatter on agent `.md` files is a
+fallback-path mechanism only (DL-023).
 
-Agent definitions referenced by teammates live under `agents/` (e.g.
-`../../agents/quality-reviewer.md`, `../../agents/architect.md`).
-
-| Skill             | Entry point                        | Team shape                                    |
-| ----------------- | ---------------------------------- | --------------------------------------------- |
-| `decision-critic` | `skills/decision-critic/team.md`   | Lead (architect) + verifier + challenger      |
-| `deepthink`       | `skills/deepthink/team.md`         | Lead + parallel analytical teammates          |
-| `problem-analysis`| `skills/problem-analysis/team.md`  | Lead + parallel investigation teammates       |
+| Skill             | Entry point                         | Worker roles                                            |
+| ----------------- | ----------------------------------- | ------------------------------------------------------ |
+| `decision-critic` | `skills/decision-critic/SKILL.md`   | verifier (`quality-reviewer`), challenger (`researcher`) |
+| `deepthink`       | `skills/deepthink/SKILL.md`         | divergent-reasoners × 3 (`researcher`)                  |
+| `problem-analysis`| `skills/problem-analysis/SKILL.md`  | investigators × N (`researcher`)                        |
 
 ## Durable Substrate
 

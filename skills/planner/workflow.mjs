@@ -335,8 +335,8 @@ function extractJson(text) {
   if (match) {
     try {
       return JSON.parse(match[0]);
-    } catch {
-      // Fall through to raw wrap
+    } catch (error) {
+      log(`extractJson: JSON.parse failed (${error.message}); falling through to raw wrap`);
     }
   }
   return { _raw: text };

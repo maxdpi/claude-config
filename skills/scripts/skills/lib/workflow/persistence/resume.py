@@ -31,15 +31,18 @@ Decision references
 from __future__ import annotations
 
 import json
+import logging
 import os
-from pathlib import Path
 from typing import Any
 
 from .events import EVENT_TASK_COMPLETED, EVENT_TASK_CREATED
 from .manifest import read_manifest
+from .paths import claude_dir, read_settings_file
 from .registry import RunHandle
 from .rundir import RunDir
-from .team_mode import read_orchestration_mode
+from .team_mode import AGENT_TEAMS_ENV, read_orchestration_mode
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Parent permission mode detection (DL-021)
@@ -48,15 +51,9 @@ from .team_mode import read_orchestration_mode
 #: Modes that override a child's permissionMode and defeat phase-trust gating.
 OVERRIDING_MODES: frozenset[str] = frozenset({"bypassPermissions", "acceptEdits", "auto"})
 
-_CLAUDE_DIR = Path.home() / ".claude"
-
-
-def _read_settings_file(path: Path) -> dict[str, Any]:
-    """Read a single settings JSON file; return empty dict on any error."""
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+#: Base ``~/.claude`` dir; settings reads use the shared ``read_settings_file``
+#: helper, which logs corruption (present-but-unreadable) at WARNING (I1/I5).
+_CLAUDE_DIR = claude_dir()
 
 
 def detect_parent_permission_mode() -> str:
@@ -88,7 +85,7 @@ def detect_parent_permission_mode() -> str:
 
     # 2. settings.local.json takes precedence over settings.json.
     for name in ("settings.local.json", "settings.json"):
-        data = _read_settings_file(_CLAUDE_DIR / name)
+        data = read_settings_file(_CLAUDE_DIR / name)
         # The probe (PLATFORM-ASSUMPTIONS.md A4) found the key at
         # permissions.defaultMode in settings.json.
         mode = (data.get("permissions") or {}).get("defaultMode", "")
@@ -106,6 +103,48 @@ def detect_parent_permission_mode() -> str:
 #: Returned by classify_phases for each remaining phase.
 CLASSIFICATION_AUTO_REPLAY = "auto_replay"
 CLASSIFICATION_NEEDS_CONFIRMATION = "needs_confirmation"
+
+
+def _load_manifest_safely(run: RunHandle | RunDir) -> tuple[dict[str, str], bool]:
+    """Read the manifest tag table, distinguishing absence from corruption.
+
+    Default-deny is preserved in BOTH failure modes (an empty manifest means
+    every phase is untagged -> needs_confirmation).  The difference is
+    observability: a *missing* manifest is a legitimate empty result, while a
+    *corrupt* manifest is an anomaly that must be surfaced so ``/resume`` can
+    warn the user rather than silently presenting "deny all" as if no manifest
+    were ever written (I1 — absent vs corrupt).
+
+    Returns:
+        ``(manifest, corrupt)`` — the tag table (empty on either failure) and a
+        flag that is ``True`` only when the file was present but unparseable.
+    """
+    try:
+        return read_manifest(run), False
+    except FileNotFoundError:
+        return {}, False
+    except json.JSONDecodeError as exc:
+        log.warning(
+            "classify_phases: manifest for run %r is present but corrupt (%s) -- "
+            "defaulting all phases to needs_confirmation and flagging for /resume",
+            getattr(run, "run_id", run), exc,
+        )
+        return {}, True
+
+
+def _classify_one_phase(tag: str | None, *, overridden: bool) -> str:
+    """Apply the default-deny phase-trust policy to a single phase tag.
+
+    Auto-replay requires BOTH an explicit ``read_only`` tag AND a
+    non-overriding parent mode; every other case (untagged, ``write``,
+    ``execute``, or an overriding parent) denies (R-003, DL-021).
+    """
+    if overridden:
+        # DL-021: parent overrides child permissionMode -> deny all.
+        return CLASSIFICATION_NEEDS_CONFIRMATION
+    if tag == "read_only":
+        return CLASSIFICATION_AUTO_REPLAY
+    return CLASSIFICATION_NEEDS_CONFIRMATION
 
 
 def classify_phases(
@@ -145,6 +184,12 @@ def classify_phases(
             all auto-replay.  ``/resume`` MUST surface this as a user warning
             (DL-021, R-007).
 
+        ``manifest_corrupt``
+            ``True`` when ``manifest.json`` was present but unparseable.  The
+            gate still defaults every phase to ``needs_confirmation`` (default-
+            deny), but this flag distinguishes lost tags from a legitimately
+            absent manifest so ``/resume`` can warn the user (I1).
+
         ``warning``
             Human-readable warning string when ``permission_mode_overridden``
             is ``True``, otherwise ``None``.
@@ -172,11 +217,9 @@ def classify_phases(
     overridden: bool = parent_permission_mode in OVERRIDING_MODES
 
     # Read the manifest tag table.  Missing file -> empty manifest (all phases
-    # treated as untagged -> needs_confirmation under default-deny).
-    try:
-        manifest: dict[str, str] = read_manifest(run)
-    except (FileNotFoundError, json.JSONDecodeError):
-        manifest = {}
+    # treated as untagged -> needs_confirmation under default-deny).  A corrupt
+    # file behaves identically for safety but is flagged so /resume can warn.
+    manifest, manifest_corrupt = _load_manifest_safely(run)
 
     # Read the projection to find already-completed phases.
     completed_phases: set[str] = _completed_phases(run)
@@ -190,19 +233,8 @@ def classify_phases(
     phase_classifications: dict[str, dict[str, Any]] = {}
     for phase_id in sorted(remaining_phase_ids):
         tag: str | None = manifest.get(phase_id)
-
-        if overridden:
-            # DL-021: parent overrides child permissionMode -> deny all.
-            classification = CLASSIFICATION_NEEDS_CONFIRMATION
-        elif tag == "read_only":
-            # Explicitly safe -> auto-replay.
-            classification = CLASSIFICATION_AUTO_REPLAY
-        else:
-            # write, execute, or untagged (default-deny per R-003).
-            classification = CLASSIFICATION_NEEDS_CONFIRMATION
-
         phase_classifications[phase_id] = {
-            "classification": classification,
+            "classification": _classify_one_phase(tag, overridden=overridden),
             "tag": tag,
         }
 
@@ -215,11 +247,20 @@ def classify_phases(
             f"All {len(phase_classifications)} remaining phase(s) require explicit "
             f"confirmation before resuming. (DL-021, R-007)"
         )
+    elif manifest_corrupt:
+        warning = (
+            f"manifest.json for this run is present but CORRUPT; its phase-trust "
+            f"tags could not be read.  All {len(phase_classifications)} remaining "
+            f"phase(s) default to needs_confirmation (default-deny, R-003).  This "
+            f"is NOT the same as a fresh run with no manifest -- the tag table was "
+            f"lost. (I1)"
+        )
 
     return {
         "phases": phase_classifications,
         "parent_permission_mode": parent_permission_mode,
         "permission_mode_overridden": overridden,
+        "manifest_corrupt": manifest_corrupt,
         "warning": warning,
     }
 
@@ -249,9 +290,59 @@ def _all_known_phases(run: RunHandle | RunDir) -> set[str]:
 # ---------------------------------------------------------------------------
 # Remaining-task computation for Agent Teams (DL-007, C-006)
 # ---------------------------------------------------------------------------
+#
+# The Agent-Teams gate env var name is the single source of truth in
+# ``team_mode.AGENT_TEAMS_ENV`` and is imported above -- it is NOT re-declared
+# here, so a rename updates every consumer atomically (I2).
 
-#: Environment variable that gates Agent Teams mode.
-_AGENT_TEAMS_ENV = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"
+
+def _scan_task_events(
+    run: RunHandle | RunDir,
+) -> tuple[dict[str, dict[str, Any]], set[str], int]:
+    """Scan ``events.jsonl`` for task lifecycle events.
+
+    Pure read + parse: returns the created-task map (keyed by task_id), the set
+    of completed task_ids, and a count of corrupt lines skipped (I1).  Kept
+    separate from the respawn-descriptor assembly so each concern is readable
+    and testable in isolation (I9).  An absent log yields empty results; corrupt
+    lines are counted, not silently dropped.
+    """
+    created: dict[str, dict[str, Any]] = {}
+    completed_ids: set[str] = set()
+
+    try:
+        text = run.events_jsonl.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError):
+        return created, completed_ids, 0
+
+    skipped = 0
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            skipped += 1
+            continue
+
+        etype = ev.get("type")
+        payload: dict[str, Any] = ev.get("payload") or {}
+
+        if etype == EVENT_TASK_CREATED:
+            task_id = payload.get("task_id") or ev.get("agent_id")
+            if task_id:
+                created[task_id] = {
+                    "task_id": task_id,
+                    "title": payload.get("title") or "",
+                    "session_id": payload.get("session_id"),
+                }
+        elif etype == EVENT_TASK_COMPLETED:
+            task_id = payload.get("task_id") or ev.get("agent_id")
+            if task_id:
+                completed_ids.add(task_id)
+
+    return created, completed_ids, skipped
 
 
 def compute_remaining_tasks(run: RunHandle | RunDir) -> dict[str, Any]:
@@ -308,46 +399,21 @@ def compute_remaining_tasks(run: RunHandle | RunDir) -> dict[str, Any]:
     # fact, and the live env var can differ from the session that created it
     # (DL-T1-02). Fall back to the live env var only for legacy runs whose
     # run-state predates the persisted field (C-001 additive-migration).
+    # NOTE: AGENT_TEAMS_ENV is imported from team_mode (single source of truth,
+    # I2) rather than redeclared locally.
     persisted_mode = read_orchestration_mode(run)
     if persisted_mode is not None:
         agent_teams_enabled = persisted_mode == "agent_teams"
     else:
-        agent_teams_enabled = bool(os.environ.get(_AGENT_TEAMS_ENV, "").strip())
+        agent_teams_enabled = bool(os.environ.get(AGENT_TEAMS_ENV, "").strip())
 
-    created: dict[str, dict[str, Any]] = {}
-    completed_ids: set[str] = set()
-
-    # Scan the durable event log for task lifecycle events.
-    try:
-        text = run.events_jsonl.read_text(encoding="utf-8")
-    except (FileNotFoundError, OSError):
-        text = ""
-
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-
-        etype = ev.get("type")
-        payload: dict[str, Any] = ev.get("payload") or {}
-
-        if etype == EVENT_TASK_CREATED:
-            task_id = payload.get("task_id") or ev.get("agent_id")
-            if task_id:
-                created[task_id] = {
-                    "task_id": task_id,
-                    "title": payload.get("title") or "",
-                    "session_id": payload.get("session_id"),
-                }
-
-        elif etype == EVENT_TASK_COMPLETED:
-            task_id = payload.get("task_id") or ev.get("agent_id")
-            if task_id:
-                completed_ids.add(task_id)
+    created, completed_ids, skipped = _scan_task_events(run)
+    if skipped:
+        log.warning(
+            "compute_remaining_tasks: skipped %d corrupt line(s) in the event log "
+            "for run %r -- the remaining-task set is derived from a partial log (I1)",
+            skipped, getattr(run, "run_id", run),
+        )
 
     incomplete: list[dict[str, Any]] = [
         task for task_id, task in created.items() if task_id not in completed_ids
@@ -377,4 +443,5 @@ def compute_remaining_tasks(run: RunHandle | RunDir) -> dict[str, Any]:
         "incomplete_tasks": incomplete,
         "completed_task_ids": completed_ids,
         "respawn_descriptor": respawn_descriptor,
+        "skipped_corrupt_lines": skipped,
     }

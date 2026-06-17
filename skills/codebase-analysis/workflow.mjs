@@ -83,7 +83,8 @@ Output your analysis as structured JSON:
   try {
     const parsed = JSON.parse(scopeResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
     focusAreas = parsed.focus_areas ?? [];
-  } catch {
+  } catch (error) {
+    log(`Focus-area parse failed (${error.message}); using defaults`);
     focusAreas = [];
   }
 

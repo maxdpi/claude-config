@@ -37,13 +37,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import paths
 from .rundir import RunDir, _resolve_base_dir
 from .registry import RunHandle, list_runs
 
 # Import the A4 probe helper — reuse, never re-derive (DL-015, DL-020).
 from .probe.subagent_transcript_probe import resolve_transcript_path
 
-_CLAUDE_DIR = Path.home() / ".claude"
+_CLAUDE_DIR = paths.claude_dir()
 _DEFAULT_RETENTION_DAYS: int = 7
 _DEFAULT_CLEANUP_PERIOD_DAYS: int = 30
 
@@ -60,14 +61,9 @@ def _read_settings() -> dict[str, Any]:
     """Merge ``settings.json`` and ``settings.local.json`` (local takes precedence)."""
     merged: dict[str, Any] = {}
     for name in ("settings.json", "settings.local.json"):
-        p = _CLAUDE_DIR / name
-        if not p.exists():
-            continue
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-            merged.update(data)
-        except (json.JSONDecodeError, OSError):
-            continue
+        # read_settings_file returns {} on absence and logs corruption (I1/I5);
+        # local file applied last so it takes precedence.
+        merged.update(paths.read_settings_file(_CLAUDE_DIR / name))
     return merged
 
 

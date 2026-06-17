@@ -33,7 +33,6 @@ Design references: M-003, DL-002, DL-015, R-008, C1.
 """
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import os
@@ -45,6 +44,7 @@ from .eventlog import append_event, read_events
 from .events import EVENT_RUN_STARTED, EVENT_TEAM_MEMBERS, event_schema
 from .fold import empty_projection
 from .hook_adapter import normalize_hook_event
+from .paths import iso_now
 from .registry import find_run
 from . import rundir
 from .rundir import RunDir
@@ -194,7 +194,15 @@ def _config_members(cfg: dict[str, Any]) -> list[dict[str, Any]]:
     or non-dict entries) yields an empty list rather than raising.
     """
     members = cfg.get("members")
+    if members is None:
+        return []
     if not isinstance(members, list):
+        # The runtime contract says members[] is a list; a non-list is shape
+        # drift worth surfacing rather than silently treating as empty (I4).
+        log.warning(
+            "teams_bridge: config.json 'members' is %s, expected list -- "
+            "treating as empty roster", type(members).__name__,
+        )
         return []
     return [m for m in members if isinstance(m, dict)]
 
@@ -320,7 +328,7 @@ def ensure_team_run(
         return handle.as_run_dir()
 
     # Create the run directory and initial files.
-    now_iso = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+    now_iso = iso_now()
     run_dir = RunDir(run_id=run_id, base=base)
     run_dir.path.mkdir(parents=True, exist_ok=True)
 
@@ -563,7 +571,7 @@ def mark_team_runs_completed(
         if state.get("status") == "completed":
             return  # already terminal
 
-        now_iso = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        now_iso = iso_now()
         state["status"] = "completed"
         state.setdefault("completed_at", now_iso)
         write_atomic(state_path, state)
