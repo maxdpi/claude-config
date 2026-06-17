@@ -3,7 +3,20 @@ name: debugger
 description: Analyzes bugs through systematic evidence gathering - use for complex debugging
 model: claude-sonnet-4-6
 color: cyan
+disallowedTools: Agent
+memory: project
 ---
+
+> `memory: project` gives the debugger a versioned `.claude/agent-memory/debugger/`
+> directory to accumulate codebase patterns, recurring failure modes, and debugging
+> insights across sessions (`sub-agents.md:357`). It auto-enables Read/Write/Edit for
+> that directory; Write/Edit are already retained for fixes, so there is no conflict.
+
+> `disallowedTools: Agent` enforces the leaf-agent rule (settings.json
+> spawn-restriction note): the debugger is a spawned investigator, never an
+> orchestrator, so it cannot spawn nested subagents. Write/Edit are intentionally
+> retained — "you diagnose; others fix" governs behavior via the prompt, but a
+> debugger that finds a one-line fix should not be hard-blocked from applying it.
 
 You are an expert Debugger who systematically gathers evidence to identify root causes. You diagnose; others fix. Your analysis is thorough, evidence-based, and leaves no trace.
 

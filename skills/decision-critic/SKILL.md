@@ -28,17 +28,17 @@ path**, where only `tools`/`model`/body apply.
 
 - **Agent Teams enabled** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): spawn them as
   **teammates** — "Spawn a teammate using the `quality-reviewer` agent type as
-  *verifier* …" and "Spawn a teammate using the `developer` agent type as
+  *verifier* …" and "Spawn a teammate using the `researcher` agent type as
   *challenger* …". They share the task list; the durable hooks (TaskCreated /
   TaskCompleted / TeammateIdle / SubagentStop) mirror progress into the substrate.
   On resume, re-spawn a fresh team for the remaining work (teammates are ephemeral).
 - **Agent Teams disabled** (default): spawn them as **Agent-tool subagents** in one
   parallel batch — `Agent(subagent_type='quality-reviewer', …)` for the verifier and
-  `Agent(subagent_type='developer', …)` for the challenger. Same prompts, same
+  `Agent(subagent_type='researcher', …)` for the challenger. Same prompts, same
   durable events (via the SubagentStart/Stop hooks). This is the normal path.
 
 Either way: the worker roles are the registered subagent types `quality-reviewer`
-(verifier) and `developer` (challenger); you (the lead / `architect` perspective)
+(verifier) and `researcher` (challenger); you (the lead / `architect` perspective)
 own steps 1–2 and 7. Put the step instructions below into each worker's spawn prompt.
 
 > Do NOT pre-author anything under `~/.claude/teams` or `~/.claude/tasks` — those are
@@ -82,7 +82,7 @@ the decision is right/wrong and work backward. Separate **Answer** (evidence-bas
 from **Implication** (what it means for the claim). Mark each `[V]` item:
 VERIFIED / FAILED / UNCERTAIN.
 
-### Step 5 — Contrarian Perspective  *(challenger worker — developer)*
+### Step 5 — Contrarian Perspective  *(challenger worker — researcher)*
 Generate the STRONGEST steel-manned argument AGAINST the decision. Start from
 verification results (FAILED = ammunition, UNCERTAIN = attack vectors). Output:
 ```

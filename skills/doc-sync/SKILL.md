@@ -1,6 +1,6 @@
 ---
 name: doc-sync
-description: Synchronizes docs across a repository. Use when user asks to sync docs.
+description: Synchronize documentation across a repository so indexes, READMEs, and per-directory docs stay consistent with the current file tree and with each other. Use when the user asks to sync, reconcile, or refresh docs — especially after files move, are added, or are renamed.
 ---
 
 # Doc Sync

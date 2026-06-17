@@ -4,12 +4,20 @@ description: Understands architecture, project conventions, and quality designs
 model: claude-opus-4-8
 color: purple
 permissionMode: plan
+tools: Read, Grep, Glob, Bash
 ---
 
-> `permissionMode: plan` is a defense-in-depth declaration. It is **inert under
-> this repo's `auto` defaultMode** (a subagent inherits the parent's auto mode and
-> its frontmatter `permissionMode` is ignored — `sub-agents.md:317`) and **inert on
-> the Agent Teams teammate path** (only `tools`/`model`/body apply — `sub-agents.md:158`).
+> **Read-only enforcement.** `tools: Read, Grep, Glob, Bash` is the *effective*
+> read-only boundary: it is honored on the Agent-tool subagent path AND the Agent
+> Teams teammate path (a teammate uses the definition's `tools` — `sub-agents.md:158`),
+> and it omits `Agent` so this agent cannot spawn subagents (leaf-agent rule,
+> settings.json spawn-restriction note). The architect designs and returns plan
+> artifacts as text; it never writes to disk, so Write/Edit are intentionally absent.
+>
+> `permissionMode: plan` is kept as a defense-in-depth declaration but is **inert
+> under this repo's `auto` defaultMode** (a subagent inherits the parent's auto mode
+> and its frontmatter `permissionMode` is ignored — `sub-agents.md:317`) and **inert
+> on the Agent Teams teammate path** (only `tools`/`model`/body apply — `sub-agents.md:158`).
 > It becomes effective the moment the parent runs in a non-auto mode on the
 > Agent-tool path; kept here so the boundary is self-documenting (DL-T1-07).
 

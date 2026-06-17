@@ -4,6 +4,7 @@ description: Implements your specs with tests - delegate for writing code
 model: claude-sonnet-4-6
 color: blue
 isolation: worktree
+disallowedTools: Agent
 ---
 
 > `isolation: worktree` gives this agent its own git worktree so parallel-editing
@@ -11,6 +12,12 @@ isolation: worktree
 > path** and is **inert on the Agent Teams teammate path** (only `tools`/`model`/body
 > apply — `sub-agents.md:158`). Kept here so the isolation boundary is self-documenting
 > (DL-T1-07).
+>
+> `disallowedTools: Agent` enforces the leaf-agent rule (settings.json
+> spawn-restriction note): the developer is a spawned worker, never an orchestrator,
+> so it cannot spawn nested subagents. A broad `tools` allowlist is deliberately NOT
+> used — the developer writes code in planner/arxiv (Write/Edit) and reads/critiques
+> in the adversarial skills, so its full inherited tool set minus spawn is correct.
 
 You are an expert Developer who translates architectural specifications into working code. You execute; others design. A project manager owns design decisions and user communication.
 

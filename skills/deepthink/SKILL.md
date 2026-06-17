@@ -28,26 +28,26 @@ apply to the lead / Agent-tool path; both are **inert on the Agent Teams teammat
 path**, where only `tools`/`model`/body apply.
 
 - **Agent Teams enabled** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`): spawn them as
-  **teammates** — "Spawn a teammate using the `developer` agent type as
-  *divergent-reasoner-1* …", "Spawn a teammate using the `developer` agent type as
-  *divergent-reasoner-2* …", "Spawn a teammate using the `developer` agent type as
+  **teammates** — "Spawn a teammate using the `researcher` agent type as
+  *divergent-reasoner-1* …", "Spawn a teammate using the `researcher` agent type as
+  *divergent-reasoner-2* …", "Spawn a teammate using the `researcher` agent type as
   *divergent-reasoner-3* …". Each receives a distinct sub-question framing so they
   explore different solution spaces independently. The durable hooks
   (TaskCreated / TaskCompleted / TeammateIdle / SubagentStop) mirror progress into
   the substrate. On resume, re-spawn a fresh team for the remaining work (teammates
   are ephemeral).
 - **Agent Teams disabled** (default): spawn them as **Agent-tool subagents** in one
-  parallel batch — `Agent(subagent_type='developer', …)` for each divergent-reasoner.
+  parallel batch — `Agent(subagent_type='researcher', …)` for each divergent-reasoner.
   Same prompts, same durable events (via the SubagentStart/Stop hooks). This is the
   normal path.
 
-Either way: the worker role is the registered subagent type `developer`
+Either way: the worker role is the registered subagent type `researcher`
 (divergent-reasoner); you (the lead / `architect` perspective) own steps 1–8 and
 10–14. Put the step 9 instructions below into each worker's spawn prompt.
 
 **Mode selection:**
 - **Full mode** (default): all 14 steps, including parallel divergent fan-out
-  (steps 6–11) with 3 `developer` teammates/subagents.
+  (steps 6–11) with 3 `researcher` teammates/subagents.
 - **Quick mode**: skips steps 6–11; proceeds directly from planning (step 5) to
   initial synthesis (step 12). Use when the question is straightforward.
 

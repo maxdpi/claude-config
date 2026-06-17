@@ -108,7 +108,7 @@ class TestNativeRuntimeReference:
         """Adversarial SKILL.md must describe the REAL Agent Teams mechanism:
         - mentions CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS (the gate env var)
         - mentions teammates OR subagents as the dispatch mechanism
-        - references registered agent types (developer, quality-reviewer, architect)
+        - references registered agent types (researcher, developer, quality-reviewer, architect)
         - has a fallback path for when Agent Teams is disabled
         """
         skill_md = SKILLS / skill / "SKILL.md"
@@ -128,9 +128,9 @@ class TestNativeRuntimeReference:
         )
 
         # Must reference at least one registered agent type
-        assert re.search(r"developer|quality-reviewer|architect", text), (
+        assert re.search(r"researcher|developer|quality-reviewer|architect", text), (
             f"{skill}/SKILL.md must reference registered agent types "
-            "(developer, quality-reviewer, or architect)"
+            "(researcher, developer, quality-reviewer, or architect)"
         )
 
         # Must describe a fallback path (Agent Teams disabled)
@@ -284,6 +284,69 @@ class TestWorkflowMjsSyntax:
         result = subprocess.run([str(script)], capture_output=True, text=True)
         assert result.returncode == 0, (
             f"check_mjs_syntax.sh exited {result.returncode}:\n{result.stdout}\n{result.stderr}"
+        )
+
+
+# ===========================================================================
+# Test 3b: Agent definitions enforce constraints via native tools primitives
+# ===========================================================================
+def _agent_frontmatter(path: Path) -> dict[str, str]:
+    """Parse the YAML frontmatter of an agent .md into a flat {key: value} dict.
+    Values are returned as raw strings (the fields under test are scalars)."""
+    text = path.read_text(encoding="utf-8")
+    m = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
+    assert m, f"{path.name}: no YAML frontmatter found"
+    fm: dict[str, str] = {}
+    for line in m.group(1).splitlines():
+        if ":" in line and not line.lstrip().startswith("#"):
+            key, _, val = line.partition(":")
+            fm[key.strip()] = val.strip()
+    return fm
+
+
+def _tool_list(raw: str) -> set[str]:
+    """Split a `tools:`/`disallowedTools:` comma-separated scalar into a set."""
+    return {t.strip() for t in raw.split(",") if t.strip()}
+
+
+class TestAgentToolConstraints:
+    """REGRESSION GUARD (DL-T1, 2026-06-16): the spawn-restriction design recorded
+    in settings.json — "spawn surface constrained by native primitives ... Agent(type)
+    allowlists in each definition's tools field" — must actually be enforced on the
+    agent definitions, not merely inherited. The `tools`/`disallowedTools` fields are
+    honored on BOTH the Agent-tool subagent path and the Agent Teams teammate path
+    (a teammate uses the definition's `tools` — sub-agents.md:158), unlike
+    `permissionMode`, which is inert under this repo's `auto` defaultMode."""
+
+    AGENTS = sorted((REPO / "agents").glob("*.md"))
+
+    @pytest.mark.parametrize("agent", [pytest.param(p, id=p.stem) for p in AGENTS])
+    def test_leaf_agents_cannot_spawn(self, agent: Path) -> None:
+        """Every custom agent is a spawned leaf worker, never an orchestrator, so it
+        must NOT be able to spawn nested subagents. Enforced natively by either a
+        `tools` allowlist that omits `Agent`, or `disallowedTools` that includes it."""
+        fm = _agent_frontmatter(agent)
+        tools = _tool_list(fm["tools"]) if "tools" in fm else None
+        disallowed = _tool_list(fm.get("disallowedTools", ""))
+        allowlist_blocks = tools is not None and not (tools & {"Agent"})
+        denylist_blocks = "Agent" in disallowed
+        assert allowlist_blocks or denylist_blocks, (
+            f"agents/{agent.name} can spawn subagents: it neither lists a `tools` "
+            f"allowlist that omits `Agent` nor a `disallowedTools` that includes `Agent`. "
+            f"Leaf agents must enforce the spawn-restriction design (settings.json)."
+        )
+
+    def test_architect_is_read_only(self) -> None:
+        """The architect designs and returns plan artifacts as text; it never writes
+        to disk. Its read-only charter must be enforced by a `tools` allowlist that
+        excludes Write and Edit (the only enforcement honored on the Agent Teams path,
+        since permissionMode:plan is inert under `auto` — sub-agents.md:317)."""
+        fm = _agent_frontmatter(REPO / "agents" / "architect.md")
+        assert "tools" in fm, "architect.md must declare a `tools` allowlist for read-only enforcement"
+        tools = _tool_list(fm["tools"])
+        assert not (tools & {"Write", "Edit"}), (
+            f"architect declares write tools {tools & {'Write', 'Edit'}}; it must stay "
+            f"read-only (it returns design JSON, never writes to disk)."
         )
 
 

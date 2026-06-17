@@ -1,6 +1,6 @@
 ---
 name: incoherence
-description: Detect and resolve incoherence in documentation, code, specs vs implementation.
+description: Invoke IMMEDIATELY via the Workflow tool when the user asks to check whether documentation, specs, comments, and code agree — detecting and resolving contradictions between an implementation and its stated intent. Do NOT explore first; the workflow orchestrates the consistency analysis.
 ---
 
 # Incoherence Detector

@@ -62,13 +62,13 @@ Ten skills have been ported from the Python `--step` CLI to native runtimes (M-0
 lead (main session) reads SKILL.md, then spawns workers as teammates when
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` or as Agent-tool subagents otherwise. There is
 no `team.md` construct — the lead orchestrates workers in natural language, referencing
-registered agent types (`developer`, `quality-reviewer`, etc.):
+registered agent types (`researcher`, `quality-reviewer`, etc.):
 
 | Skill            | Entry point                          | Worker roles                            |
 | ---------------- | ------------------------------------ | --------------------------------------- |
-| decision-critic  | `skills/decision-critic/SKILL.md`   | verifier (`quality-reviewer`), challenger (`developer`) |
-| deepthink        | `skills/deepthink/SKILL.md`          | divergent-reasoners × 3 (`developer`)  |
-| problem-analysis | `skills/problem-analysis/SKILL.md`  | investigators × N (`developer`)         |
+| decision-critic  | `skills/decision-critic/SKILL.md`   | verifier (`quality-reviewer`), challenger (`researcher`) |
+| deepthink        | `skills/deepthink/SKILL.md`          | divergent-reasoners × 3 (`researcher`)  |
+| problem-analysis | `skills/problem-analysis/SKILL.md`  | investigators × N (`researcher`)         |
 
 Durable phase-boundary events are written under `skills/scripts/skills/lib/workflow/persistence/` on both paths.
 

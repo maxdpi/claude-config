@@ -17,7 +17,7 @@
     {
       "agentId": "challenger@session-abcd1234",
       "name": "challenger",
-      "agentType": "developer",
+      "agentType": "researcher",
       "joinedAt": 1781662715000,
       "tmuxPaneId": "%1",
       "cwd": "/Users/ethnet/Documents/GitHub/claude-config",
