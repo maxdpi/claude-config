@@ -54,6 +54,50 @@ def read_settings_file(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge ``override`` onto ``base`` (override wins at the leaf).
+
+    Nested dicts are merged key-by-key; any non-dict value (or a dict replacing
+    a non-dict) is taken from ``override``.  ``base`` is not mutated.
+    """
+    out = dict(base)
+    for key, value in override.items():
+        existing = out.get(key)
+        if isinstance(value, dict) and isinstance(existing, dict):
+            out[key] = _deep_merge(existing, value)
+        else:
+            out[key] = value
+    return out
+
+
+def read_settings_merged(claude_dir_path: Path | None = None) -> dict[str, Any]:
+    """Return ``settings.json`` deep-merged with ``settings.local.json`` on top.
+
+    THE single source of settings-precedence truth.  ``settings.local.json``
+    overrides ``settings.json`` at the *leaf*, so a key present in only one file
+    survives and a key in both resolves to the local value.  This replaces three
+    independently-written precedence loops that achieved local-wins via *opposite*
+    mechanisms — two used first-present-key iteration over ``(local, json)`` while
+    a third used a shallow ``dict.update()`` over ``(json, local)``.  Both happened
+    to be correct, but the divergence was a copy-paste hazard: any reorder or
+    merge-semantics swap silently inverted precedence (the latent bug).
+
+    A *deep* merge is used deliberately so that, e.g., a ``settings.local.json``
+    that defines only ``permissions.allow`` does NOT shadow a ``permissions.
+    defaultMode`` set in ``settings.json`` — preserving the per-key fallback the
+    security-sensitive permission-mode read (R-003/R-007) relied on.
+
+    Args:
+        claude_dir_path: Base dir holding the two settings files.  Defaults to
+            ``claude_dir()``; callers pass their module ``_CLAUDE_DIR`` so test
+            monkeypatching of that constant continues to work.
+    """
+    base_dir = claude_dir_path if claude_dir_path is not None else claude_dir()
+    base = read_settings_file(base_dir / "settings.json")
+    local = read_settings_file(base_dir / "settings.local.json")
+    return _deep_merge(base, local)
+
+
 def iso_now() -> str:
     """Return the current UTC time as an ISO-8601 string."""
     return datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
