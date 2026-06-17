@@ -1,6 +1,6 @@
 ---
 name: refactor
-description: Invoke IMMEDIATELY via the Workflow tool when user requests refactoring analysis, technical debt review, or code quality improvement. Do NOT explore first - the workflow orchestrates exploration.
+description: Invoke IMMEDIATELY via the Workflow tool when user explicitly asks for code smells, technical debt, refactoring opportunities, or code-quality improvements. Do NOT explore first - the workflow orchestrates exploration. Boundary - use this when the ask is about what to improve/fix in the code; for general comprehension or architecture orientation (no quality judgment requested) use codebase-analysis instead.
 ---
 
 # Refactor

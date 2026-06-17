@@ -56,7 +56,7 @@ Evaluate the sub-agent design for:
 ### Step 8 — Design Revision  *(lead — Full mode only)*
 Revise sub-agent tasks based on step 7 critique. Confirm final task definitions.
 
-### Step 9 — Dispatch  *(divergent-reasoner workers — developer — Full mode only)*
+### Step 9 — Dispatch  *(divergent-reasoner workers — `researcher` (read-only) — Full mode only)*
 Each `divergent-reasoner` worker executes ONE assigned sub-question task.
 Use Read/Glob/Grep to gather evidence. Produce structured findings.
 DO NOT coordinate with other divergent-reasoner workers.

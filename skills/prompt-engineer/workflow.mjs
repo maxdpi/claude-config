@@ -93,8 +93,33 @@ Wait for explicit user approval before continuing.`;
   phase("triage");
 
   // Honor an explicit scope from args — skip auto-detection when provided.
+  // Accept three arg shapes so a FREE-TEXT invocation is honored too (the
+  // earlier misfire passed `args` as a plain string "... Scope: ecosystem ..."
+  // so `args.scope` was undefined and auto-triage mis-guessed greenfield):
+  //   1. args.scope                         — object form {scope: "ecosystem"}
+  //   2. a "scope: <x>" / "scope=<x>" hint  — anywhere in a string arg or
+  //                                            args.request / args.text
+  //   3. args being the bare scope token    — "ecosystem"
   const VALID_SCOPES = ["single-prompt", "ecosystem", "greenfield", "problem"];
-  const explicitScope = args && VALID_SCOPES.includes(args.scope) ? args.scope : null;
+  const scopeText = [
+    typeof args === "string" ? args : null,
+    args && typeof args.request === "string" ? args.request : null,
+    args && typeof args.text === "string" ? args.text : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const freeTextScopeMatch = scopeText.match(
+    /scope\s*[:=]\s*(single-prompt|ecosystem|greenfield|problem)/i,
+  );
+  const bareScope =
+    typeof args === "string" && VALID_SCOPES.includes(args.trim().toLowerCase())
+      ? args.trim().toLowerCase()
+      : null;
+  const explicitScope =
+    (args && VALID_SCOPES.includes(args.scope) && args.scope) ||
+    (freeTextScopeMatch && freeTextScopeMatch[1].toLowerCase()) ||
+    bareScope ||
+    null;
 
   let scope;
   if (explicitScope) {
@@ -340,6 +365,62 @@ Present to user and WAIT for explicit approval.`,
   phase("execute");
 
   const targetFile = args && (args.file || args.path || (args.targets && args.targets[0]));
+
+  // ── Ecosystem scope: per-file output, not a single collapsed blob ─────────
+  // An ecosystem audit spans multiple interacting prompt files. Returning ONE
+  // string forces the caller to manually split changes per file (the deficiency
+  // flagged in review). Produce a structured per-file artifact AND keep a
+  // human-readable `optimized_prompt` (a file-delimited document) so the parity
+  // contract — required key `optimized_prompt` — is preserved.
+  if (scope === "ecosystem") {
+    const ECOSYSTEM_OUTPUT_SCHEMA = {
+      type: "object",
+      properties: {
+        files: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "File path of this prompt" },
+              optimized_prompt: {
+                type: "string",
+                description: "Full optimized prompt text for this file",
+              },
+              changes: {
+                type: "string",
+                description: "One-line summary of changes applied to this file",
+              },
+            },
+            required: ["path", "optimized_prompt"],
+          },
+        },
+      },
+      required: ["files"],
+    };
+
+    const ecoResult = await agent(
+      `PROMPT ENGINEER (ecosystem) — Finalize PER FILE
+
+Approved proposal:
+${approveResult}
+
+Produce the final optimized prompt text for EACH file in the ecosystem SEPARATELY.
+${
+  targetFile
+    ? `Apply the approved edits to the target file(s) and verify by reading each back.`
+    : `Do NOT write to disk — return each file's optimized prompt text as an artifact.`
+}
+Return one entry per file: its path, the complete optimized prompt text, and a
+one-line change summary. Do NOT merge files into a single blob.`,
+      { label: "execute", phase: "execute", schema: ECOSYSTEM_OUTPUT_SCHEMA },
+    );
+
+    const per_file = (ecoResult && ecoResult.files) || [];
+    const optimized_prompt = per_file
+      .map((f) => `===== FILE: ${f.path} =====\n${f.optimized_prompt}`)
+      .join("\n\n");
+    return { optimized_prompt, per_file };
+  }
 
   let optimized_prompt;
   if (scope === "greenfield" || !targetFile) {

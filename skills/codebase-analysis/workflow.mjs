@@ -158,7 +158,12 @@ SELECT 1-3 targets for this iteration. Explore each:
   - Understand data transformations
   - Map dependencies
 
-ASSESS confidence (output exactly one of these on the last line):
+ASSESS confidence — ground it in what you actually READ this iteration, not in a
+general feeling of understanding. A claim you have not verified against a file
+caps confidence at "medium". Only report "high"/"certain" for areas where you read
+the relevant source directly. If your understanding still rests on unread code,
+say "low"/"exploring" and keep iterating.
+Output exactly one of these on the last line:
   CONFIDENCE: certain
   CONFIDENCE: high
   CONFIDENCE: medium

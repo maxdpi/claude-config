@@ -392,7 +392,7 @@ STATUS: [COMPLETE | BLOCKED | ESCALATED]
 </tests>
 
 <verification>
-[5-word summary per check; max 3 checks; max 25 tokens total]
+[One concise line per applicable verification_questions check: number + cite/answer, or "n/a". Skip checks that do not apply. Keep each line terse; ~120 tokens total.]
 </verification>
 
 <notes>

@@ -344,12 +344,15 @@ function extractJson(text) {
 
 /**
  * Check whether a QR verdict response contains a PASS.
- * Returns true if PASS found, false if FAIL or ambiguous.
+ * Authoritative signal is the explicit "VERDICT: PASS" line; a bare "PASS"
+ * anywhere in prose is NOT sufficient (it falsely passed verdicts like
+ * "checks all PASS except ..."). Returns true only on an explicit PASS verdict
+ * that is not contradicted by an explicit FAIL verdict.
  */
 function isQrPass(qrResult) {
   if (!qrResult) return false;
   const upper = qrResult.toUpperCase();
-  return upper.includes("VERDICT: PASS") || upper.includes("PASS") && !upper.includes("FAIL");
+  return upper.includes("VERDICT: PASS") && !upper.includes("VERDICT: FAIL");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

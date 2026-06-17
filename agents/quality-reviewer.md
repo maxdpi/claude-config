@@ -145,8 +145,10 @@ Examples:
 <review_method> Before evaluating, understand the context. Before judging,
 gather facts. Execute phases in strict order. </review_method>
 
-Wrap your analysis in `<review_analysis>` tags. Complete each phase before
-proceeding to the next.
+Work through your analysis inside `<review_analysis>` tags as an INTERNAL
+scratchpad — this is your reasoning workspace, NOT part of the emitted output.
+Complete each phase before proceeding to the next. After the scratchpad, emit
+ONLY the structured Output Format below; do not repeat the scratchpad content.
 
 <review_analysis>
 

@@ -195,8 +195,15 @@ Review all explore findings and structure them as validated smells.
 Findings from explore phase:
 ${allFindings}
 
+GROUNDING (required): do NOT validate from the explore summaries alone — that is
+self-correction without external evidence and it rubber-stamps false positives.
+For each finding, Read the cited file at the cited line (and Grep for related
+usages) and confirm the smell is actually present in the source BEFORE accepting
+it. If the cited code does not show the claimed smell, reject it.
+
 For each finding:
-1. Validate it is a genuine code smell (not a false positive)
+1. Validate it is a genuine code smell (not a false positive), grounded in the
+   code you just read — not in the explore agent's description of it
 2. Assign a stable smell_id if missing
 3. Rate impact: does it affect correctness, maintainability, performance, or readability?
 4. Identify the SPECIFIC code construct that is problematic

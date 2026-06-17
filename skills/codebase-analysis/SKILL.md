@@ -1,6 +1,6 @@
 ---
 name: codebase-analysis
-description: Invoke IMMEDIATELY via the Workflow tool when user requests codebase understanding, architecture comprehension, or repository orientation. Do NOT explore first - the workflow orchestrates exploration.
+description: Invoke IMMEDIATELY via the Workflow tool when user requests codebase understanding, architecture comprehension, or repository orientation. Do NOT explore first - the workflow orchestrates exploration. Boundary - use this for comprehension ("how does this work / how is it structured"); for code-quality smells, technical debt, or improvement suggestions use refactor instead; for single-file bug investigation use the debugger.
 ---
 
 # Codebase Analysis

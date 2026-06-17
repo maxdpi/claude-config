@@ -78,8 +78,12 @@ C1 [V]: <claim>
 ### Step 4 — Factored Verification  *(verifier worker)*
 Answer each question INDEPENDENTLY (the most important step). Epistemic boundary:
 use ONLY established knowledge, stated constraints, logical inference; do NOT assume
-the decision is right/wrong and work backward. Separate **Answer** (evidence-based)
-from **Implication** (what it means for the claim). Mark each `[V]` item:
+the decision is right/wrong and work backward. **External grounding:** if a `[V]`
+claim is checkable against the codebase or available docs, use Read/Grep/Glob to
+verify it against the actual source BEFORE marking it — parametric recall alone is
+not sufficient evidence for a claim about a specific system, and unverified recall
+must be marked UNCERTAIN, not VERIFIED. Separate **Answer** (evidence-based) from
+**Implication** (what it means for the claim). Mark each `[V]` item:
 VERIFIED / FAILED / UNCERTAIN.
 
 ### Step 5 — Contrarian Perspective  *(challenger worker — researcher)*
