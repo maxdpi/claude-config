@@ -42,7 +42,7 @@ def write_atomic(path: Path | str, data: dict) -> None:
         data: Any JSON-serialisable dict.
     """
     path = Path(path)
-    payload = json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    payload = json.dumps(data, ensure_ascii=True, sort_keys=True).encode("utf-8")
 
     fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=".tmp-")
     try:

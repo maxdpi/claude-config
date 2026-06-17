@@ -56,7 +56,7 @@ def _truncate_event(event: dict) -> bytes:
     was applied. Raises ``ValueError`` only if even a minimal event skeleton
     exceeds the limit (should never occur in practice).
     """
-    line = (json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+    line = (json.dumps(event, ensure_ascii=True, separators=(",", ":")) + "\n").encode("utf-8")
     if len(line) <= _MAX_EVENT_BYTES:
         return line
 
@@ -68,7 +68,7 @@ def _truncate_event(event: dict) -> bytes:
             payload[field] = payload[field][:300] + "…[truncated]"
             event["payload"] = payload
             line = (
-                json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+                json.dumps(event, ensure_ascii=True, separators=(",", ":")) + "\n"
             ).encode("utf-8")
             if len(line) <= _MAX_EVENT_BYTES:
                 log.warning(
@@ -84,7 +84,7 @@ def _truncate_event(event: dict) -> bytes:
         if jk:
             event["payload"]["journal_key"] = jk
         line = (
-            json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+            json.dumps(event, ensure_ascii=True, separators=(",", ":")) + "\n"
         ).encode("utf-8")
         log.warning(
             "eventlog: event payload fully stripped to fit within %d bytes "

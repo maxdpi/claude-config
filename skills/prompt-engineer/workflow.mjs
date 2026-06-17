@@ -89,12 +89,21 @@ VERIFICATION SUMMARY:
 CRITICAL: STOP. Do NOT proceed to Execute step.
 Wait for explicit user approval before continuing.`;
 
-export async function run() {
   // ── Phase 1: Triage ───────────────────────────────────────────────────────
   phase("triage");
 
-  const triageResult = await agent(
-    `PROMPT ENGINEER — Triage
+  // Honor an explicit scope from args — skip auto-detection when provided.
+  const VALID_SCOPES = ["single-prompt", "ecosystem", "greenfield", "problem"];
+  const explicitScope = args && VALID_SCOPES.includes(args.scope) ? args.scope : null;
+
+  let scope;
+  if (explicitScope) {
+    // Caller supplied a valid scope — use it directly, no auto-detection.
+    scope = explicitScope;
+    log(`Using caller-supplied scope: ${scope} (triage auto-detection skipped)`);
+  } else {
+    const triageResult = await agent(
+      `PROMPT ENGINEER — Triage
 
 EXAMINE the input, request, AND any relevant prior conversation:
   - Problem descriptions stated earlier
@@ -124,12 +133,13 @@ DETERMINE SCOPE:
 OUTPUT:
   SCOPE: [single-prompt | ecosystem | greenfield | problem]
   RATIONALE: [why this scope fits]`,
-    { label: "triage", phase: "triage" },
-  );
+      { label: "triage", phase: "triage" },
+    );
 
-  const scopeMatch = triageResult.match(/SCOPE:\s*(single-prompt|ecosystem|greenfield|problem)/i);
-  const scope = scopeMatch ? scopeMatch[1].toLowerCase() : "single-prompt";
-  log(`Triaged scope: ${scope}`);
+    const scopeMatch = triageResult.match(/SCOPE:\s*(single-prompt|ecosystem|greenfield|problem)/i);
+    scope = scopeMatch ? scopeMatch[1].toLowerCase() : "single-prompt";
+    log(`Triaged scope: ${scope}`);
+  }
 
   // ── Phase 2: Assess / Understand ─────────────────────────────────────────
   phase("assess");
@@ -201,7 +211,7 @@ STRUCTURE DECISION:
 Output design requirements summary.`;
   } else {
     // problem
-    assertPrompt = `PROMPT ENGINEER (problem) — Diagnose
+    assessPrompt = `PROMPT ENGINEER (problem) — Diagnose
 
 UNDERSTAND the problem:
   - What specific behavior is failing?
@@ -217,7 +227,6 @@ CLASSIFY the problem:
   (problem may span multiple categories)
 
 Output problem diagnosis.`;
-    assessPrompt = assertPrompt;
   }
 
   const assessResult = await agent(assessPrompt, { label: "assess", phase: "assess" });
@@ -234,10 +243,9 @@ ${assessResult}
 
 READ relevant technique references from the optimization library:
   - references/reasoning/ for reasoning improvements
-  - references/consistency/ for consistency improvements
-  - references/accuracy/ for accuracy improvements
+  - references/correctness/ for consistency and accuracy improvements
   - references/context/ for context/grounding improvements
-  - references/efficiency/ for output compression
+  - references/efficiency.md for output compression
 
 CONTEXT GATHERING:
   For MULTIPLE RELATED PROMPTS:
@@ -325,22 +333,46 @@ Present to user and WAIT for explicit approval.`,
   );
 
   // ── Phase 7: Execute ──────────────────────────────────────────────────────
+  // INVARIANT: the file-edit path runs ONLY when an explicit target file was
+  // provided in args (args.file / args.targets / args.path). For greenfield
+  // scope or when no target file is given, return the prompt text as an
+  // artifact — never read-modify-write any file.
   phase("execute");
 
-  const optimized_prompt = await agent(
-    `PROMPT ENGINEER (${scope}) — Execute
+  const targetFile = args && (args.file || args.path || (args.targets && args.targets[0]));
+
+  let optimized_prompt;
+  if (scope === "greenfield" || !targetFile) {
+    // No target file supplied (or greenfield design request): produce the
+    // prompt text as output only — do not touch any file on disk.
+    const executeResult = await agent(
+      `PROMPT ENGINEER (${scope}) — Finalize
+
+Approved proposal:
+${approveResult}
+
+Produce the final, complete prompt text ready for use.
+Output ONLY the prompt text (no meta-commentary).`,
+      { label: "execute", phase: "execute" },
+    );
+    optimized_prompt = executeResult;
+  } else {
+    // Explicit target file was provided — apply approved edits to that file.
+    const executeResult = await agent(
+      `PROMPT ENGINEER (${scope}) — Execute
 
 Approved changes:
 ${approveResult}
 
-Apply ALL approved changes to the target file(s).
+Apply ALL approved changes to the target file: ${targetFile}
   - Make ONLY the approved changes
   - Preserve all non-changed content exactly
   - Verify by reading the updated file
 
 Output the final optimized prompt text and a summary of changes applied.`,
-    { label: "execute", phase: "execute" },
-  );
+      { label: "execute", phase: "execute" },
+    );
+    optimized_prompt = executeResult;
+  }
 
   return { optimized_prompt };
-}

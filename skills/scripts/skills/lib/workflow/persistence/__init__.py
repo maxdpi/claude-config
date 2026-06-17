@@ -51,6 +51,13 @@ from .fold import empty_projection, fold
 from .manifest import read_manifest, write_phase_manifest
 from .projection import replay, verify_projection
 from .rundir import RunDir, create_run_dir
+from .teams_bridge import (
+    ensure_team_run,
+    extract_team_name,
+    mark_team_runs_completed,
+    record_team_event,
+    team_name_from_session,
+)
 
 __all__ = [
     # atomic
@@ -84,4 +91,10 @@ __all__ = [
     # manifest
     "write_phase_manifest",
     "read_manifest",
+    # teams_bridge
+    "team_name_from_session",
+    "extract_team_name",
+    "ensure_team_run",
+    "record_team_event",
+    "mark_team_runs_completed",
 ]

@@ -34,6 +34,10 @@ from .events import (
     EVENT_RUN_STARTED,
     EVENT_SUBAGENT_COMPLETED,
     EVENT_SUBAGENT_SPAWNED,
+    EVENT_TASK_CREATED,
+    EVENT_TASK_COMPLETED,
+    EVENT_TEAMMATE_IDLE,
+    EVENT_TEAM_MEMBERS,
 )
 
 # ---------------------------------------------------------------------------
@@ -50,6 +54,8 @@ def empty_projection() -> dict[str, Any]:
         "milestones": {},
         "resume_cursor": None,
         "subagents": {},
+        "tasks": {},
+        "teammates": {},
     }
 
 
@@ -176,6 +182,66 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
             if "native_session_id" in payload:
                 entry["native_session_id"] = payload["native_session_id"]
             p["subagents"][aid] = entry
+
+    elif etype == EVENT_TASK_CREATED:
+        # Agent Teams task graph: record task as pending/in_progress.
+        # Field names are ASSUMED (unverified) — see hook_adapter._PAYLOAD_TASK_ID.
+        payload = event.get("payload") or {}
+        task_id = payload.get("task_id")  # ASSUMED (unverified)
+        if task_id:
+            entry = p["tasks"].get(task_id, {})
+            entry["status"] = "in_progress"
+            entry.setdefault("title", payload.get("title") or "")  # ASSUMED (unverified)
+            entry.setdefault("created_at", event.get("ts"))
+            p["tasks"][task_id] = entry
+
+    elif etype == EVENT_TASK_COMPLETED:
+        # Agent Teams task graph: transition task to completed.
+        payload = event.get("payload") or {}
+        task_id = payload.get("task_id")  # ASSUMED (unverified)
+        if task_id:
+            entry = p["tasks"].get(task_id, {})
+            entry["status"] = "completed"
+            entry["completed_at"] = event.get("ts")
+            p["tasks"][task_id] = entry
+
+    elif etype == EVENT_TEAMMATE_IDLE:
+        # Agent Teams: record teammate idle state.
+        # Field names are ASSUMED (unverified) — see hook_adapter._PAYLOAD_TEAMMATE_ID.
+        payload = event.get("payload") or {}
+        teammate_id = payload.get("teammate_id")  # ASSUMED (unverified)
+        if teammate_id:
+            entry = p["teammates"].get(teammate_id, {})
+            entry["status"] = "idle"
+            entry["idle_at"] = event.get("ts")
+            for k, v in payload.items():
+                entry.setdefault(k, v)
+            p["teammates"][teammate_id] = entry
+
+    elif etype == EVENT_TEAM_MEMBERS:
+        # Authoritative team membership from ~/.claude/teams/<name>/config.json
+        # (C1 fix). Keyed by the REAL member name; identity fields (name,
+        # agent_type, agent_id, lead) are authoritative and overwrite any prior
+        # guess, while best-effort state (e.g. idle_at from TeammateIdle) is
+        # preserved via the existing entry.
+        payload = event.get("payload") or {}
+        members = payload.get("members") or []
+        lead_agent_id = payload.get("lead_agent_id")
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            name = member.get("name") or member.get("agent_id") or member.get("agentId")
+            if not name:
+                continue
+            entry = p["teammates"].get(name, {})
+            entry["name"] = name
+            entry["agent_type"] = member.get("agentType") or member.get("agent_type")
+            entry["agent_id"] = member.get("agentId") or member.get("agent_id")
+            entry["source"] = "config"
+            agent_id = entry["agent_id"]
+            entry["is_lead"] = bool(lead_agent_id) and agent_id == lead_agent_id
+            entry.setdefault("status", "active")
+            p["teammates"][name] = entry
 
     # Unknown event types: return projection unchanged (C-005, forward-compat).
     return p

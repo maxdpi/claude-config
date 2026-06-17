@@ -112,7 +112,6 @@ SELECTION RULES:
 - L, M are critical for design-phase docs and specs-to-be-implemented
 `;
 
-export async function run() {
   // ── Phase 1: Survey ───────────────────────────────────────────────────────
   phase("survey");
 
@@ -202,7 +201,7 @@ FINDING 1: A=[file:line] B=[file:line] Conflict=[desc] Confidence=[h/m/l]
         {
           label: `broad-sweep-${dim.letter}`,
           phase: "broad_sweep",
-          agentType: "explorer",
+          agentType: "Explore",
           model: "haiku",
         },
       )
@@ -285,7 +284,7 @@ ANALYSIS: {why conflict} | RECOMMENDATION: {fix}`,
         {
           label: `deep-dive-${cand.id}`,
           phase: "deep_dive",
-          agentType: "explorer",
+          agentType: "Explore",
           model: "sonnet",
         },
       )
@@ -475,4 +474,3 @@ Output inline report (no file):
   );
 
   return { verdicts: confirmedVerdicts };
-}

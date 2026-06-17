@@ -36,6 +36,11 @@ EVENT_RESUME_CURSOR: str = "resume_cursor"
 EVENT_TASK_CREATED: str = "task_created"
 EVENT_TASK_COMPLETED: str = "task_completed"
 EVENT_TEAMMATE_IDLE: str = "teammate_idle"
+# Authoritative team membership read from the runtime-owned
+# ~/.claude/teams/<name>/config.json (teams_bridge producer; C1 fix). Carries the
+# real member list (name/agentType/agentId) so the teammates projection no longer
+# depends on the null/ASSUMED TeammateIdle field names.
+EVENT_TEAM_MEMBERS: str = "team_members"
 
 # ---------------------------------------------------------------------------
 # Envelope builder

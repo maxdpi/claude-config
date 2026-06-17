@@ -69,6 +69,7 @@ from skills.lib.workflow.persistence.hook_adapter import (
     _PAYLOAD_PARENT_AGENT_ID,
     _PAYLOAD_DEPTH,
     _PAYLOAD_TRANSCRIPT_PATH,
+    _PAYLOAD_AGENT_TRANSCRIPT_PATH,
     _PAYLOAD_TASK_ID,
     _PAYLOAD_TITLE,
     _PAYLOAD_TEAMMATE_ID,
@@ -129,7 +130,8 @@ def _make_subagent_stop_payload(
         "extra_field_unknown": "dropped",
     }
     if transcript_path is not None:
-        payload[_PAYLOAD_TRANSCRIPT_PATH] = transcript_path  # "transcript_path"
+        # The SUBAGENT's own transcript drives copy-on-stop (confirmed via S1).
+        payload[_PAYLOAD_AGENT_TRANSCRIPT_PATH] = transcript_path  # "agent_transcript_path"
     return payload
 
 
@@ -263,24 +265,28 @@ class TestNormalizeHookEvent:
         assert event["parent_agent_id"] == "parent-001"
         assert event["depth"] == 2
 
-    def test_fixture_confirms_assumed_field_names(self) -> None:
-        """AC-3: Fixture explicitly documents assumed payload field names (R-008)."""
-        assert _PAYLOAD_AGENT_ID == "agentId", (
-            "R-008: SubagentStart agentId field assumed as 'agentId' "
-            "(confirmed in A4 transcript records; hook payload assumed to match)"
+    def test_fixture_confirms_real_field_names(self) -> None:
+        """R-008 RESOLVED: payload field names CONFIRMED via the S1 live-capture
+        probe (2026-06-16). Claude Code hook payloads use snake_case (NOT the
+        camelCase that A4 *transcript records* use). Pin the confirmed names so a
+        regression (or a CC field rename) is caught."""
+        assert _PAYLOAD_AGENT_ID == "agent_id", (
+            "S1 live capture: SubagentStart/Stop carry 'agent_id' (snake_case), "
+            "not the 'agentId' that transcript records use"
         )
-        assert _PAYLOAD_SESSION_ID == "sessionId", (
-            "R-008: sessionId field assumed as 'sessionId' "
-            "(confirmed in A4 transcript records)"
+        assert _PAYLOAD_SESSION_ID == "session_id", (
+            "S1 live capture: payloads carry 'session_id' (snake_case)"
         )
-        assert _PAYLOAD_PARENT_AGENT_ID == "parentAgentId", (
-            "R-008: parentAgentId field assumed (not confirmed by M-000 probe)"
-        )
-        assert _PAYLOAD_DEPTH == "depth", (
-            "R-008: depth field assumed (not confirmed by M-000 probe)"
+        # parentAgentId / depth are NOT emitted by current CC (confirmed absent);
+        # constants kept for forward-compat. absent -> top-level / depth 0.
+        assert _PAYLOAD_PARENT_AGENT_ID == "parentAgentId"
+        assert _PAYLOAD_DEPTH == "depth"
+        # SubagentStop carries TWO transcript paths; copy-on-stop uses the SUBAGENT's.
+        assert _PAYLOAD_AGENT_TRANSCRIPT_PATH == "agent_transcript_path", (
+            "S1 live capture: the subagent's own transcript (copy-on-stop target, DL-016)"
         )
         assert _PAYLOAD_TRANSCRIPT_PATH == "transcript_path", (
-            "R-008: transcript_path field assumed in SubagentStop payload"
+            "S1 live capture: this is the PARENT session transcript -- NOT copied"
         )
 
 
@@ -459,7 +465,13 @@ class TestRunEventHookCorrelation:
         assert any(e["type"] == EVENT_TASK_CREATED for e in events)
 
     def test_unmatched_payload_quarantined_non_fatal(self, tmp_path: Path, monkeypatch) -> None:
-        """Unmatched payload goes to quarantine; hook exits 0 (non-fatal)."""
+        """Unmatched payload with no team context goes to quarantine; hook exits 0.
+
+        A payload must have NO session_id/team_name to be genuinely unresolvable:
+        if session_id is present, teams_bridge captures it as a team run instead
+        of quarantining (teams_bridge M-003 extension). This test uses a payload
+        with no session_id and no team_name to exercise the pure quarantine path.
+        """
         monkeypatch.delenv("CLAUDE_SKILL_RUN_ID", raising=False)
         quarantine_records: list[dict] = []
 
@@ -475,7 +487,15 @@ class TestRunEventHookCorrelation:
             importlib.reload(run_event_hook)
 
             with mock.patch.object(run_event_hook, "_write_quarantine", _fake_quarantine):
-                payload = _make_task_created_payload("no-match-task")
+                # Use a payload with NO session_id and no team_name so that
+                # teams_bridge.extract_team_name returns None and the event is
+                # genuinely unresolvable (quarantine path).
+                payload = {
+                    "hook_event_name": "TaskCreated",
+                    "task_id": "no-match-task",
+                    "title": "something",
+                    # deliberately no session_id, no team_name
+                }
                 exit_code = run_event_hook.main(payload=payload)
 
         assert exit_code == 0, "Hook must exit 0 (non-fatal) for unmatched payload"

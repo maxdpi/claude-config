@@ -1,0 +1,18 @@
+{
+  "name": "session-a4810f8d",
+  "createdAt": 1781662712076,
+  "leadAgentId": "team-lead@session-a4810f8d",
+  "leadSessionId": "a4810f8d-8176-4fc5-b349-ce06d32b964a",
+  "members": [
+    {
+      "agentId": "team-lead@session-a4810f8d",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "joinedAt": 1781662712076,
+      "tmuxPaneId": "leader",
+      "cwd": "/Users/ethnet/Documents/GitHub/claude-config",
+      "subscriptions": [],
+      "backendType": "in-process"
+    }
+  ]
+}

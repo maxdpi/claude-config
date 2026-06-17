@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Orchestration mode selection: Agent Teams vs Workflow-tool fallback.
+"""Orchestration mode selection: Agent Teams vs Agent-tool subagent fallback.
 
-Detects CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS. When set, skills drive
-Agent Teams. When unset, they fall back to the Workflow tool + Agent-tool
-subagents, producing identical durable events either way (DL-007/DL-009).
+Detects CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS. When set, the lead (main session)
+spawns workers as Agent Teams teammates in natural language. When unset, the lead
+spawns them as Agent-tool subagents (`Agent(subagent_type=...)`). Both paths emit
+identical durable events (TaskCreated / TaskCompleted via M-003 hooks) so resume
+works across both paths (DL-007/DL-009).
+
+The fallback (mode="workflow") uses Agent-tool subagents, NOT a workflow.mjs or
+a python --step CLI. The mode name "workflow" is a substrate label only; no
+workflow.mjs is involved for adversarial skills.
 
 Never pre-author team config or task dirs: Agent Teams dirs are ephemeral
 and must not be seeded before the session starts (A3).
@@ -51,9 +57,11 @@ def select_orchestration_mode() -> ModeDescriptor:
     Teams. An empty string (the default in settings.json) means "off" so
     settings.json can document the var without activating it accidentally.
 
-    The fallback path (mode="workflow") produces IDENTICAL durable event
-    types and projection as the team path — same TaskCreated / TaskCompleted
-    events via M-003 hooks — so resume works across both paths (DL-007).
+    The fallback path (mode="workflow") uses Agent-tool subagents instead of
+    Agent Teams teammates. It produces IDENTICAL durable event types and
+    projection as the team path — same TaskCreated / TaskCompleted events via
+    M-003 hooks — so resume works across both paths (DL-007). No workflow.mjs
+    or python --step CLI is involved in the fallback for adversarial skills.
     """
     env_value = os.environ.get(AGENT_TEAMS_ENV)
     available = bool(env_value)  # non-empty string -> available

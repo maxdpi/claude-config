@@ -1,6 +1,6 @@
 # skills/
 
-Agent workflows implemented on two native runtimes: the Workflow tool (`workflow.mjs`) for linear skills and Agent Teams (`team.md`) for adversarial skills.
+Agent workflows implemented on two native runtimes: the Workflow tool (`workflow.mjs`) for linear skills and Agent Teams / Agent-tool subagents for adversarial skills.
 
 ## MANDATORY: Read Before Modifying Python Files
 
@@ -58,13 +58,17 @@ Ten skills have been ported from the Python `--step` CLI to native runtimes (M-0
 | prompt-engineer     | `skills/prompt-engineer/workflow.mjs`   |
 | leon-writing-style  | `skills/leon-writing-style/workflow.mjs`|
 
-**Adversarial skills — Agent Teams** (`skills/<name>/team.md`), with Workflow+Agent-tool fallback when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is unset:
+**Adversarial skills — Agent Teams / subagent fallback** (`skills/<name>/SKILL.md`): the
+lead (main session) reads SKILL.md, then spawns workers as teammates when
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` or as Agent-tool subagents otherwise. There is
+no `team.md` construct — the lead orchestrates workers in natural language, referencing
+registered agent types (`developer`, `quality-reviewer`, etc.):
 
-| Skill            | Entry point                         |
-| ---------------- | ----------------------------------- |
-| decision-critic  | `skills/decision-critic/team.md`    |
-| deepthink        | `skills/deepthink/team.md`          |
-| problem-analysis | `skills/problem-analysis/team.md`   |
+| Skill            | Entry point                          | Worker roles                            |
+| ---------------- | ------------------------------------ | --------------------------------------- |
+| decision-critic  | `skills/decision-critic/SKILL.md`   | verifier (`quality-reviewer`), challenger (`developer`) |
+| deepthink        | `skills/deepthink/SKILL.md`          | divergent-reasoners × 3 (`developer`)  |
+| problem-analysis | `skills/problem-analysis/SKILL.md`  | investigators × N (`developer`)         |
 
 Durable phase-boundary events are written under `skills/scripts/skills/lib/workflow/persistence/` on both paths.
 

@@ -47,13 +47,18 @@ from skills.lib.workflow.persistence.hook_adapter import (
     normalize_hook_event,
     _PAYLOAD_AGENT_ID,
     _PAYLOAD_SESSION_ID,
-    _PAYLOAD_TRANSCRIPT_PATH,
+    _PAYLOAD_AGENT_TRANSCRIPT_PATH,
 )
 from skills.lib.workflow.persistence.eventlog import append_event
 from skills.lib.workflow.persistence.registry import list_runs, find_run
 from skills.lib.workflow.persistence.rundir import _resolve_base_dir
 from skills.lib.workflow.persistence.probe.subagent_transcript_probe import (
     resolve_transcript_path,
+)
+from skills.lib.workflow.persistence.teams_bridge import (
+    record_team_event,
+    _TEAM_HOOK_TYPES,
+    extract_team_name,
 )
 
 log = logging.getLogger(__name__)
@@ -128,8 +133,11 @@ def _copy_native_transcript(
 ) -> None:
     """Copy the native transcript to transcript.jsonl atomically.
 
-    PRIMARY path: ``transcript_path`` field in the SubagentStop payload.
-    DERIVED path: resolved from sessionId + agentId via the A4 probe helper.
+    PRIMARY path: ``agent_transcript_path`` field in the SubagentStop payload --
+    the SUBAGENT's own transcript (DL-016). NOTE: the plain ``transcript_path``
+    field is the PARENT session transcript and must NOT be copied (confirmed via
+    the S1 live-capture probe, R-008).
+    DERIVED path: resolved from session_id + agent_id via the A4 probe helper.
     If neither resolves, a WARNING is logged but the hook exits non-fatally.
 
     The copy is atomic (tmp + os.rename) so concurrent readers see either
@@ -137,7 +145,8 @@ def _copy_native_transcript(
     """
     native_agent_id: str | None = hook_payload.get(_PAYLOAD_AGENT_ID) or None
     native_session_id: str | None = hook_payload.get(_PAYLOAD_SESSION_ID) or None
-    transcript_path_raw: str | None = hook_payload.get(_PAYLOAD_TRANSCRIPT_PATH)
+    # Subagent's own transcript (NOT the parent session transcript).
+    transcript_path_raw: str | None = hook_payload.get(_PAYLOAD_AGENT_TRANSCRIPT_PATH)
 
     src: Path | None = None
 
@@ -147,7 +156,7 @@ def _copy_native_transcript(
             src = candidate
         else:
             log.warning(
-                "run_event_hook: SubagentStop transcript_path %r does not exist; "
+                "run_event_hook: SubagentStop agent_transcript_path %r does not exist; "
                 "will try deriving from session_id + agent_id",
                 transcript_path_raw,
             )
@@ -248,6 +257,16 @@ def main(payload: dict | None = None) -> int:
 
     run_id = _resolve_run_id(payload)
     if not run_id:
+        # Before quarantining, check if this is an Agent Teams event that can
+        # be captured via the teams_bridge live hook stream (M-003 extension).
+        # Criteria: hook type is a known team event type OR the payload carries
+        # a resolvable team_name / session_id that teams_bridge can derive from.
+        is_team_hook = hook_type in _TEAM_HOOK_TYPES or bool(extract_team_name(payload))
+        if is_team_hook:
+            team_run_id = record_team_event(payload)
+            if team_run_id:
+                # Event captured — do not quarantine.
+                return 0
         log.warning(
             "run_event_hook: no run resolved for hook_type=%r — quarantining",
             hook_type,

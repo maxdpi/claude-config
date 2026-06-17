@@ -37,7 +37,6 @@ export const meta = {
   },
 };
 
-export async function run() {
   // ── Phase 1: Discover ─────────────────────────────────────────────────────
   phase("discover");
 
@@ -172,7 +171,7 @@ ${
         {
           label: `convert-${paper.arxiv_id}`,
           phase: "convert",
-          agentType: "converter",
+          agentType: "developer",
           isolation: "worktree",
         },
       );
@@ -247,4 +246,3 @@ Failed:
       summary: finalizeResult,
     },
   };
-}

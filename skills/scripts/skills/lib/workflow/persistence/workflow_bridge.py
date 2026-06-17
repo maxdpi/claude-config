@@ -106,17 +106,23 @@ def _extract_phase_trust(mjs_source: str) -> dict[str, str]:
 
 
 def _find_mjs(workflow_name: str) -> Path | None:
-    """Locate ``skills/{workflowName}/workflow.mjs`` relative to the repo root.
+    """Locate ``<root>/skills/{workflowName}/workflow.mjs`` for the current layout.
 
-    The repo root is derived from this file's location inside the Python package
-    (skills/scripts/skills/lib/workflow/persistence/workflow_bridge.py).
+    Works in BOTH layouts without hard-coded level counts:
+      - repo checkout:  <repo>/skills/<name>/workflow.mjs
+      - ~/.claude install: ~/.claude/skills/<name>/workflow.mjs
+    This file lives at ``.../skills/scripts/skills/lib/workflow/persistence/
+    workflow_bridge.py`` — i.e. UNDER an outer ``skills/`` dir that is the sibling
+    parent of the per-skill dirs. We walk every ``skills``-named ancestor and
+    return the first where ``<ancestor>/<name>/workflow.mjs`` exists (the inner
+    ``scripts/skills`` ancestor won't match; the outer one will).
     """
-    # This file: .../skills/scripts/skills/lib/workflow/persistence/workflow_bridge.py
-    # Repo root: six levels up from here.
-    repo_root = Path(__file__).parent.parent.parent.parent.parent.parent
-    candidate = repo_root / "skills" / workflow_name / "workflow.mjs"
-    if candidate.exists():
-        return candidate
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        if ancestor.name == "skills":
+            candidate = ancestor / workflow_name / "workflow.mjs"
+            if candidate.exists():
+                return candidate
     return None
 
 
@@ -273,22 +279,42 @@ def bridge_workflow_run(
     # ── Deterministic substrate run_id ────────────────────────────────────────
     run_id = f"wf-{wf_run_id}"
 
+    # Map the Workflow run-state status onto the substrate's terminal/active
+    # distinction. A COMPLETED workflow must be marked terminal so it is NOT
+    # offered for resume forever and becomes eligible for the done-only TTL prune
+    # (retention keys on status ∈ {done,tombstoned,completed} + completed_at).
+    import datetime
+    _now_iso = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+    bridged_status = "completed" if wf_status == "completed" else "running"
+
     # ── Create or reuse substrate run dir (idempotent) ────────────────────────
     handle = find_run(run_id, base_dir=base)
     if handle is not None:
         run_dir = handle.as_run_dir()
+        # Idempotent re-bridge: if the workflow has SINCE completed (e.g. it was
+        # mid-run at SessionStart and finished by SessionEnd), promote the run to
+        # terminal so it stops being offered for resume.
+        try:
+            cur = json.loads(run_dir.run_state.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            cur = {}
+        if bridged_status == "completed" and cur.get("status") != "completed":
+            cur["status"] = "completed"
+            cur.setdefault("completed_at", _now_iso)
+            write_atomic(run_dir.run_state, cur)
     else:
         run_dir = RunDir(run_id=run_id, base=base)
         run_dir.path.mkdir(parents=True, exist_ok=True)
-        import datetime, uuid
         run_state_data: dict = {
             "run_id": run_id,
             "skill": workflow_name,
             "wf_run_id": wf_run_id,
             "session_id": session_id,
-            "started_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
-            "status": "running",
+            "started_at": _now_iso,
+            "status": bridged_status,
         }
+        if bridged_status == "completed":
+            run_state_data["completed_at"] = _now_iso
         write_atomic(run_dir.run_state, run_state_data)
         run_dir.events_jsonl.touch()
         from .fold import empty_projection

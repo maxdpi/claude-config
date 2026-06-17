@@ -40,7 +40,6 @@ export const meta = {
 
 const MAX_DEEPEN_ITERATIONS = 4;
 
-export async function run() {
   // ── Phase 1: SCOPE ──────────────────────────────────────────────────────
   phase("Scope");
 
@@ -118,7 +117,7 @@ Report your findings covering:
 - FLOWS: How data or requests move through this area
 - DECISIONS: Key technology/design choices
 - CONNECTIONS: How this area interfaces with others`,
-        { label: `survey-${area.slice(0, 30)}`, phase: "survey", agentType: "explorer" },
+        { label: `survey-${area.slice(0, 30)}`, phase: "survey", agentType: "Explore" },
       )
     ),
   );
@@ -225,4 +224,3 @@ Ensure:
   );
 
   return { synthesis };
-}
