@@ -264,7 +264,9 @@ class TestWorkflowMjsSyntax:
         skill-local skills/<name>/agents/<type>.md. A skill-local agentType fails
         at runtime with "agent type 'X' not found". Every agentType used must
         resolve to a registered agent."""
-        registered = {p.stem for p in (REPO / "agents").glob("*.md")} | self._BUILTIN_AGENT_TYPES
+        registered = {
+            p.stem for p in (REPO / "agents").glob("*.md") if p.name != "CLAUDE.md"
+        } | self._BUILTIN_AGENT_TYPES
         used = set(re.findall(r"""agentType:\s*['"]([^'"]+)['"]""", mjs.read_text(encoding="utf-8")))
         unresolvable = used - registered
         assert not unresolvable, (
@@ -318,7 +320,8 @@ class TestAgentToolConstraints:
     (a teammate uses the definition's `tools` — sub-agents.md:158), unlike
     `permissionMode`, which is inert under this repo's `auto` defaultMode."""
 
-    AGENTS = sorted((REPO / "agents").glob("*.md"))
+    # CLAUDE.md is the directory index, not an agent definition — exclude it.
+    AGENTS = sorted(p for p in (REPO / "agents").glob("*.md") if p.name != "CLAUDE.md")
 
     @pytest.mark.parametrize("agent", [pytest.param(p, id=p.stem) for p in AGENTS])
     def test_leaf_agents_cannot_spawn(self, agent: Path) -> None:
