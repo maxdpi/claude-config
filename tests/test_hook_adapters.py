@@ -465,7 +465,13 @@ class TestRunEventHookCorrelation:
         assert any(e["type"] == EVENT_TASK_CREATED for e in events)
 
     def test_unmatched_payload_quarantined_non_fatal(self, tmp_path: Path, monkeypatch) -> None:
-        """Unmatched payload goes to quarantine; hook exits 0 (non-fatal)."""
+        """Unmatched payload with no team context goes to quarantine; hook exits 0.
+
+        A payload must have NO session_id/team_name to be genuinely unresolvable:
+        if session_id is present, teams_bridge captures it as a team run instead
+        of quarantining (teams_bridge M-003 extension). This test uses a payload
+        with no session_id and no team_name to exercise the pure quarantine path.
+        """
         monkeypatch.delenv("CLAUDE_SKILL_RUN_ID", raising=False)
         quarantine_records: list[dict] = []
 
@@ -481,7 +487,15 @@ class TestRunEventHookCorrelation:
             importlib.reload(run_event_hook)
 
             with mock.patch.object(run_event_hook, "_write_quarantine", _fake_quarantine):
-                payload = _make_task_created_payload("no-match-task")
+                # Use a payload with NO session_id and no team_name so that
+                # teams_bridge.extract_team_name returns None and the event is
+                # genuinely unresolvable (quarantine path).
+                payload = {
+                    "hook_event_name": "TaskCreated",
+                    "task_id": "no-match-task",
+                    "title": "something",
+                    # deliberately no session_id, no team_name
+                }
                 exit_code = run_event_hook.main(payload=payload)
 
         assert exit_code == 0, "Hook must exit 0 (non-fatal) for unmatched payload"

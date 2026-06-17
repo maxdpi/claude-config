@@ -34,6 +34,9 @@ from .events import (
     EVENT_RUN_STARTED,
     EVENT_SUBAGENT_COMPLETED,
     EVENT_SUBAGENT_SPAWNED,
+    EVENT_TASK_CREATED,
+    EVENT_TASK_COMPLETED,
+    EVENT_TEAMMATE_IDLE,
 )
 
 # ---------------------------------------------------------------------------
@@ -50,6 +53,8 @@ def empty_projection() -> dict[str, Any]:
         "milestones": {},
         "resume_cursor": None,
         "subagents": {},
+        "tasks": {},
+        "teammates": {},
     }
 
 
@@ -176,6 +181,41 @@ def fold(projection: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
             if "native_session_id" in payload:
                 entry["native_session_id"] = payload["native_session_id"]
             p["subagents"][aid] = entry
+
+    elif etype == EVENT_TASK_CREATED:
+        # Agent Teams task graph: record task as pending/in_progress.
+        # Field names are ASSUMED (unverified) — see hook_adapter._PAYLOAD_TASK_ID.
+        payload = event.get("payload") or {}
+        task_id = payload.get("task_id")  # ASSUMED (unverified)
+        if task_id:
+            entry = p["tasks"].get(task_id, {})
+            entry["status"] = "in_progress"
+            entry.setdefault("title", payload.get("title") or "")  # ASSUMED (unverified)
+            entry.setdefault("created_at", event.get("ts"))
+            p["tasks"][task_id] = entry
+
+    elif etype == EVENT_TASK_COMPLETED:
+        # Agent Teams task graph: transition task to completed.
+        payload = event.get("payload") or {}
+        task_id = payload.get("task_id")  # ASSUMED (unverified)
+        if task_id:
+            entry = p["tasks"].get(task_id, {})
+            entry["status"] = "completed"
+            entry["completed_at"] = event.get("ts")
+            p["tasks"][task_id] = entry
+
+    elif etype == EVENT_TEAMMATE_IDLE:
+        # Agent Teams: record teammate idle state.
+        # Field names are ASSUMED (unverified) — see hook_adapter._PAYLOAD_TEAMMATE_ID.
+        payload = event.get("payload") or {}
+        teammate_id = payload.get("teammate_id")  # ASSUMED (unverified)
+        if teammate_id:
+            entry = p["teammates"].get(teammate_id, {})
+            entry["status"] = "idle"
+            entry["idle_at"] = event.get("ts")
+            for k, v in payload.items():
+                entry.setdefault(k, v)
+            p["teammates"][teammate_id] = entry
 
     # Unknown event types: return projection unchanged (C-005, forward-compat).
     return p

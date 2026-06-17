@@ -55,6 +55,11 @@ from skills.lib.workflow.persistence.rundir import _resolve_base_dir
 from skills.lib.workflow.persistence.probe.subagent_transcript_probe import (
     resolve_transcript_path,
 )
+from skills.lib.workflow.persistence.teams_bridge import (
+    record_team_event,
+    _TEAM_HOOK_TYPES,
+    extract_team_name,
+)
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
@@ -252,6 +257,16 @@ def main(payload: dict | None = None) -> int:
 
     run_id = _resolve_run_id(payload)
     if not run_id:
+        # Before quarantining, check if this is an Agent Teams event that can
+        # be captured via the teams_bridge live hook stream (M-003 extension).
+        # Criteria: hook type is a known team event type OR the payload carries
+        # a resolvable team_name / session_id that teams_bridge can derive from.
+        is_team_hook = hook_type in _TEAM_HOOK_TYPES or bool(extract_team_name(payload))
+        if is_team_hook:
+            team_run_id = record_team_event(payload)
+            if team_run_id:
+                # Event captured — do not quarantine.
+                return 0
         log.warning(
             "run_event_hook: no run resolved for hook_type=%r — quarantining",
             hook_type,

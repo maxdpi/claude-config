@@ -420,9 +420,41 @@ proving `bridge_workflow_run` reads the real run-state and emits events correctl
 
 **Goal:** When `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set, validate that
 adversarial skills (`/decision-critic`, `/problem-analysis`) spawn teammates,
-fire TeammateIdle payloads, and that `~/.claude/teams` appears (populated by the
-runtime, NOT by the substrate). Confirm that nothing is written under
-`~/.claude/teams` or `~/.claude/tasks` by the substrate itself.
+fire TeammateIdle payloads, and that team runs are now captured in the durable
+substrate via the live hook stream (run id `team-session-<8char>`). Confirm that
+nothing is written under `~/.claude/teams` or `~/.claude/tasks` by the substrate.
+
+**teams_bridge capture (M-003 extension)**
+
+Agent Teams runs are captured from the LIVE HOOK STREAM, not from on-disk dirs
+(`~/.claude/teams/session-*/config.json` — those are reaped at session end and
+their format is unverified). When TaskCreated, TaskCompleted, TeammateIdle,
+SubagentStart, or SubagentStop payloads carry a resolvable `team_name` or
+`session_id`, `teams_bridge.record_team_event` creates a substrate run with id
+`team-<team_name>` (e.g., `team-session-abcd1234`).
+
+**Raw payload capture for field-name verification**
+
+`teams_bridge._capture_raw_payload` writes every incoming team hook payload to
+`~/.claude/skill-runs-debug/team-payloads.jsonl` BEFORE normalization. This
+auto-records real `TaskCreated`/`TaskCompleted`/`TeammateIdle`/`SubagentStart`/
+`SubagentStop` payload shapes on the next real teammate run so that the ASSUMED
+field names in `teams_bridge.py` and `hook_adapter.py` can be verified. After
+a real run, inspect this file:
+
+```bash
+cat ~/.claude/skill-runs-debug/team-payloads.jsonl | python3 -c "
+import json, sys
+for line in sys.stdin:
+    r = json.loads(line)
+    print(r['payload'].get('hook_event_name'), list(r['payload'].keys()))
+"
+```
+
+Compare the field names against the `# ASSUMED (unverified)` constants in
+`teams_bridge.py` (`_PAYLOAD_TEAM_NAME`, `_PAYLOAD_TEAM_NAME_CAMEL`) and
+`hook_adapter.py` (`_PAYLOAD_TASK_ID`, `_PAYLOAD_TITLE`, `_PAYLOAD_TEAMMATE_ID`).
+Update each constant that differs — each is a one-line fix.
 
 **How adversarial skills work (real mechanism):**
 - The skills run from `skills/<name>/SKILL.md`, NOT a `team.md` file (there is no
@@ -470,22 +502,43 @@ or, for the hypothesis-debate case (N investigator teammates in parallel):
 /problem-analysis
 ```
 
-After the run, check for TeammateIdle captures and skill-run events:
+After the run, check for TeammateIdle captures, the team-payloads debug file,
+and the durable event log:
 
 ```bash
-ls ~/.claude/skill-runs-debug/payloads-TeammateIdle.jsonl
-python3 -c "import json; [print(json.dumps(json.loads(l)['payload'], indent=2)) for l in open('$HOME/.claude/skill-runs-debug/payloads-TeammateIdle.jsonl').readlines()[:2]]"
+# Debug capture (raw payloads — written by teams_bridge before normalization):
+ls ~/.claude/skill-runs-debug/team-payloads.jsonl
+python3 -c "import json; [print(json.loads(l)['payload'].get('hook_event_name'), list(json.loads(l)['payload'].keys())) for l in open('$HOME/.claude/skill-runs-debug/team-payloads.jsonl').readlines()[:3]]"
 
-# Also check the durable event log:
+# TeammateIdle capture (if dump_payload_hook.py is also installed):
+ls ~/.claude/skill-runs-debug/payloads-TeammateIdle.jsonl
+
+# Durable team run — should show a team-session-<8char> run:
 ls ~/.claude/skill-runs/
 python3 -c "
-import json
-from pathlib import Path
-runs = sorted(Path.home().glob('.claude/skill-runs/*/events.jsonl'))
-if runs:
-    for line in runs[-1].read_text().splitlines()[-5:]:
-        print(json.loads(line).get('type'), json.loads(line).get('payload', {}).get('task_id', ''))
+import sys, json
+sys.path.insert(0, '$REPO_ROOT/skills/scripts')
+from skills.lib.workflow.persistence.registry import list_runs
+for r in list_runs():
+    if r['run_id'].startswith('team-'):
+        print(r)
 "
+```
+
+**Assert team run populated:**
+
+```bash
+# Find the team run_id (e.g. team-session-abcd1234) then check it:
+python3 tests/live/assert/assert_events_populated.py team-session-<8char>
+```
+
+Expected:
+```
+PASS  1. Run directory exists
+PASS  2. events.jsonl parseable + typed
+PASS  3. projection.json matches replay()
+PASS  4. projection.tasks non-empty (teams_bridge capture)
+RESULT: PASS — team run captured from live hook stream.
 ```
 
 **Step 3 — Check that `~/.claude/teams` was created by the runtime (not the substrate).**
@@ -505,13 +558,34 @@ python3 tests/live/assert/assert_no_runtime_dir_writes.py --check
 # Expected: PASS — no new writes to ~/.claude/teams or ~/.claude/tasks
 ```
 
-**Step 4 — Check TeammateIdle payload fields.**
+**Step 4 — Verify ASSUMED field names from team-payloads.jsonl.**
+
+The `~/.claude/skill-runs-debug/team-payloads.jsonl` file records every raw
+team hook payload. Inspect it to verify or refute the ASSUMED constants:
+
+```bash
+python3 -c "
+import json
+lines = open('$HOME/.claude/skill-runs-debug/team-payloads.jsonl').readlines()
+for line in lines[:5]:
+    p = json.loads(line)['payload']
+    print(p.get('hook_event_name'), '|', sorted(p.keys()))
+"
+```
+
+Cross-reference with:
+- `teams_bridge._PAYLOAD_TEAM_NAME = 'team_name'`          — ASSUMED (unverified)
+- `teams_bridge._PAYLOAD_TEAM_NAME_CAMEL = 'teamName'`     — ASSUMED (unverified)
+- `hook_adapter._PAYLOAD_TASK_ID = 'task_id'`               — ASSUMED (unverified)
+- `hook_adapter._PAYLOAD_TITLE = 'title'`                   — ASSUMED (unverified)
+- `hook_adapter._PAYLOAD_TEAMMATE_ID = 'teammate_id'`       — ASSUMED (unverified)
+
+If a real field name differs, update the constant (one-line fix). Also update
+the corresponding fixture in `tests/test_teams_bridge.py` to match.
 
 Run `assert_payload_fields.py` after a TeammateIdle capture — the script only
-inspects SubagentStart/Stop, so TeammateIdle fields must be manually reviewed
-from the raw JSON. Specifically look for: `teammate_id` (or `agentId`) and
-`sessionId` in the payload. If the runtime uses different field names, update
-`_PAYLOAD_TEAMMATE_ID` in `hook_adapter.py`.
+inspects SubagentStart/Stop, so TeammateIdle/TaskCreated fields must be verified
+manually from `team-payloads.jsonl`.
 
 **Step 5 — teams_dir_probe across session end (A3 retest).**
 

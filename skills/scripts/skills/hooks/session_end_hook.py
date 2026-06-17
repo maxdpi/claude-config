@@ -37,6 +37,7 @@ from skills.lib.workflow.persistence.registry import list_runs, find_run
 from skills.lib.workflow.persistence.projection import replay
 from skills.lib.workflow.persistence.atomic import write_atomic
 from skills.lib.workflow.persistence.workflow_bridge import bridge_session_workflows
+from skills.lib.workflow.persistence.teams_bridge import mark_team_runs_completed
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
@@ -66,6 +67,10 @@ def main(payload: dict | None = None) -> int:
             bridge_session_workflows(session_id)
         except Exception:
             log.warning("session_end_hook: workflow bridge failed", exc_info=True)
+        try:
+            mark_team_runs_completed(session_id)
+        except Exception:
+            log.warning("session_end_hook: teams bridge mark_completed failed", exc_info=True)
 
     for run_summary in list_runs():
         if run_summary.get("status") not in _RUNNING_STATUSES:
