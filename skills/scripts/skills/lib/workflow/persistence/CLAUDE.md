@@ -25,6 +25,41 @@ Durable event-sourcing substrate for skill runs: run directories, append-only ev
 | `teams_bridge.py`   | Hook-driven bridge: Agent Teams hook events → durable substrate                  | Debugging Agent Teams capture, modifying team event handling          |
 | `workflow_bridge.py`| Hook-driven bridge: Workflow-tool run-state JSON → `events.jsonl` + manifest     | Debugging Workflow-tool phase bridging, modifying phase lifecycle     |
 
+## Substrate stratification (assessed, not split) — DL-T3-10
+
+The persistence substrate has a natural two-tier boundary that is **already true by
+usage**. No modules are split — documenting the existing boundary captures the same
+value without churn.
+
+**Shared modules** (imported by both linear `workflow.mjs` skills AND adversarial
+`SKILL.md` skills):
+
+| Module           | Used by adversarial skills? |
+| ---------------- | --------------------------- |
+| `events.py`      | yes — event envelope schema |
+| `teams_bridge.py`| yes — Agent Teams hook capture |
+| `team_mode.py`   | yes — mode detection |
+| `atomic.py`      | yes — write-safety primitive |
+| `paths.py`       | yes — shared fs primitives |
+| `registry.py`    | yes — run listing |
+| `fold.py`        | yes — pure projection fold |
+
+**Linear-skill / Workflow-tool–only modules** (never on the adversarial path):
+
+| Module              | Why adversarial skills don't touch it |
+| ------------------- | ------------------------------------- |
+| `manifest.py`       | phase-trust manifest; adversarial skills have no Workflow phases |
+| `resume.py`         | Workflow-tool resume engine; adversarial leads re-invoke manually |
+| `workflow_bridge.py`| Workflow-tool hook bridge; not wired for NL-lead sessions |
+| `plan_html.py`      | plan HTML rendering; planner-only |
+| `journal_bridge.py` | Workflow-tool journal sync; adversarial skills have no journal |
+
+**Why adversarial skills are NOT re-platformed onto the Workflow tool (DL-T3-10):**
+Content-hash keying of `(prompt, opts)` means the cache benefit of Workflow-tool
+phases is identical to the NL-lead path adversarial skills already use, while
+re-platforming would lose the lead's natural-language orchestration. This is a
+confirmed no-op. Adversarial skills stay on the NL-lead path.
+
 ## Subdirectories
 
 | Directory | What                                                                   | When to read                                                 |

@@ -89,7 +89,10 @@ Examples:
 
 ## Output Brevity
 
-Report only structured findings. No prose preamble, no explanatory text outside the report format.
+In the **final report**: structured findings only. No prose preamble, no explanatory
+text outside the report format. Debug-statement instrumentation during investigation
+is expected and governed by RULE 0 cleanup — the no-prose constraint applies to
+report output, not to the investigation itself.
 
 ## Efficiency
 
@@ -276,16 +279,6 @@ Why correct: Systematically narrows down the divergence point using evidence.
 3. Resource leaks → (progressive degradation)
 4. Logic errors → (deterministic, easier to isolate)
 5. Integration issues → (boundary conditions)
-
-## Advanced Analysis
-
-Use external analysis tools ONLY AFTER collecting 10+ debug outputs:
-
-- `mcp__pal__analyze` - Pattern recognition across debug output
-- `mcp__pal__consensus` - Cross-validate hypothesis with multiple reasoning paths
-- `mcp__pal__thinkdeep` - Architectural root cause analysis
-
-These tools augment your evidence - they do not replace it.
 
 ## Escalation
 

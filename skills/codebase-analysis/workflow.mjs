@@ -15,7 +15,8 @@
  * is not yet met. This port replaces the Python --step CLI but does not
  * yet emit events to events.jsonl at phase boundaries.
  *
- * permissionMode / maxTurns / skills live on agents/explorer.md (DL-023).
+ * Explore fan-out uses agentType:"scout" (read-only, no worktree isolation on any
+ * path). No explorer.md agent is referenced (DL-023, DL-018).
  */
 
 export const meta = {
@@ -72,21 +73,28 @@ Output your analysis as structured JSON:
   "focus_areas": ["area1", "area2", ...],
   "goals": ["goal1", "goal2", "goal3"]
 }`,
-    { label: "scope", phase: "scope" },
+    {
+      label: "scope",
+      phase: "scope",
+      schema: {
+        type: "object",
+        properties: {
+          codebase:    { type: "string" },
+          user_intent: { type: "string" },
+          focus_areas: { type: "array", items: { type: "string" } },
+          goals:       { type: "array", items: { type: "string" } },
+        },
+        required: ["focus_areas", "goals"],
+      },
+    },
   );
 
   // ── Phase 2: SURVEY ─────────────────────────────────────────────────────
   phase("Survey");
 
-  // Determine focus areas from scope (parse JSON or use defaults)
-  let focusAreas;
-  try {
-    const parsed = JSON.parse(scopeResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    focusAreas = parsed.focus_areas ?? [];
-  } catch (error) {
-    log(`Focus-area parse failed (${error.message}); using defaults`);
-    focusAreas = [];
-  }
+  // Derive focus areas from the structured scope result; fall through to defaults
+  // when the agent returns an empty array (schema guarantees shape, not content).
+  let focusAreas = scopeResult?.focus_areas ?? [];
 
   // Default to 3 parallel survey agents if scope didn't produce focus areas
   if (focusAreas.length === 0) {
@@ -97,7 +105,7 @@ Output your analysis as structured JSON:
     ];
   }
 
-  const surveyContext = `Scope analysis:\n${scopeResult}`;
+  const surveyContext = `Scope analysis:\n${JSON.stringify(scopeResult, null, 2)}`;
 
   const surveyResults = await parallel(
     focusAreas.map((area) => () =>
@@ -163,20 +171,30 @@ general feeling of understanding. A claim you have not verified against a file
 caps confidence at "medium". Only report "high"/"certain" for areas where you read
 the relevant source directly. If your understanding still rests on unread code,
 say "low"/"exploring" and keep iterating.
-Output exactly one of these on the last line:
-  CONFIDENCE: certain
-  CONFIDENCE: high
-  CONFIDENCE: medium
-  CONFIDENCE: low
-  CONFIDENCE: exploring`,
-      { label: `deepen-${iteration}`, phase: "deepen" },
+Set the confidence field to exactly one of: certain, high, medium, low, exploring`,
+      {
+        label: `deepen-${iteration}`,
+        phase: "deepen",
+        schema: {
+          type: "object",
+          properties: {
+            confidence: {
+              type: "string",
+              enum: ["certain", "high", "medium", "low", "exploring"],
+            },
+            findings: { type: "string" },
+          },
+          required: ["confidence"],
+        },
+      },
     );
 
-    deepenFindings += `\n\n## Iteration ${iteration}\n${deepenResult}`;
+    // findings may be a string field or absent; fall back to the stringified object
+    // so the accumulation stays human-readable in logs.
+    const iterationFindings = deepenResult?.findings ?? JSON.stringify(deepenResult ?? {});
+    deepenFindings += `\n\n## Iteration ${iteration}\n${iterationFindings}`;
 
-    // Parse confidence from the result
-    const confidenceMatch = deepenResult.match(/CONFIDENCE:\s*(certain|high|medium|low|exploring)/i);
-    confidence = confidenceMatch ? confidenceMatch[1].toLowerCase() : "medium";
+    confidence = (deepenResult?.confidence ?? "medium").toLowerCase();
 
     log(`Deepen iteration ${iteration}: confidence=${confidence}`);
 

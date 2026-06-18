@@ -1,0 +1,25 @@
+{
+  "probe": "pipeline",
+  "decision_log": "DL-T1-05",
+  "gates_milestone": "M-006 (arxiv convert->finalize restructuring)",
+  "captured_at": "2026-06-18T19:11:33Z",
+  "interactive_session": false,
+  "checks": {
+    "pipeline_available": null,
+    "tmp_artifact_survives_worktree_isolation": null
+  },
+  "verdict": "INCONCLUSIVE_NONINTERACTIVE",
+  "verdict_enum": [
+    "APPROVED",
+    "REJECTED",
+    "INCONCLUSIVE_NONINTERACTIVE"
+  ],
+  "recommended_m006_path": "sequence",
+  "recommended_m006_path_enum": [
+    "pipeline",
+    "sequence"
+  ],
+  "resolution": "INCONCLUSIVE_NONINTERACTIVE: a real invocation spike requires an interactive Workflow-tool session and cannot be performed from a non-interactive Python context.  Per DL-T1-05, the default fallback is 'sequence' (keep the existing path).",
+  "grep_evidence": "grep -r 'pipeline' docs/ returns only CI-pipeline prose; zero SDK-primitive mentions of a pipeline() Workflow-tool function.",
+  "live_probe_instructions": "Interactive re-test: in a Workflow-tool session, (1) call pipeline() with a two-stage toy flow where stage 1 writes /tmp/probe_pipeline/marker.md under isolation:\"worktree\" and stage 2 attempts to read it back; (2) record whether pipeline() resolves without error and whether the marker.md is readable in stage 2; (3) re-run this probe with --interactive --pipeline-available=true|false --tmp-survives=true|false."
+}

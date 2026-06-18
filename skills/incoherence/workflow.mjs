@@ -21,7 +21,8 @@
  *     8. application      — parallel apply agents per resolved file
  *     9. report           — present final summary
  *
- * permissionMode:plan + maxTurns on agents/explorer.md (DL-023).
+ * broad_sweep/deep_dive fan-out uses agentType:"scout" (read-only); no
+ * explorer.md agent is referenced (DL-023, DL-018).
  * Write-phase application workers use isolation:worktree in their agent opts.
  */
 
@@ -151,15 +152,35 @@ Output JSON:
     {"letter": "A", "name": "Specification vs Behavior", "rationale": "README + code present"}
   ]
 }`,
-    { label: "dimension-select", phase: "dimension_select" },
+    {
+      label: "dimension-select",
+      phase: "dimension_select",
+      schema: {
+        type: "object",
+        properties: {
+          dimensions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                letter:    { type: "string" },
+                name:      { type: "string" },
+                rationale: { type: "string" },
+              },
+              required: ["letter", "name"],
+            },
+          },
+        },
+        required: ["dimensions"],
+      },
+    },
   );
 
-  let dimensions = [];
-  try {
-    const parsed = JSON.parse(dimensionResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    dimensions = parsed.dimensions ?? [];
-  } catch (error) {
-    log(`Dimension parse failed (${error.message}); using defaults`);
+  // The A/C/I default encodes the minimal useful dimension set when the agent
+  // returns an empty array; it is domain knowledge, not a dead fallback.
+  let dimensions = dimensionResult?.dimensions ?? [];
+  if (dimensions.length === 0) {
+    log("Dimension select returned empty; using A/C/I defaults");
     dimensions = [
       { letter: "A", name: "Specification vs Behavior" },
       { letter: "C", name: "Cross-Reference Consistency" },
@@ -203,7 +224,6 @@ FINDING 1: A=[file:line] B=[file:line] Conflict=[desc] Confidence=[h/m/l]
           label: `broad-sweep-${dim.letter}`,
           phase: "broad_sweep",
           agentType: "scout",
-          model: "haiku",
         },
       )
     ),
@@ -242,16 +262,34 @@ Output JSON:
     }
   ]
 }`,
-    { label: "synthesize-candidates", phase: "synthesize_candidates" },
+    {
+      label: "synthesize-candidates",
+      phase: "synthesize_candidates",
+      schema: {
+        type: "object",
+        properties: {
+          candidates: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id:         { type: "string" },
+                dimension:  { type: "string" },
+                location_a: { type: "string" },
+                location_b: { type: "string" },
+                summary:    { type: "string" },
+                score:      { type: "number" },
+              },
+              required: ["id", "dimension", "summary"],
+            },
+          },
+        },
+        required: ["candidates"],
+      },
+    },
   );
 
-  let candidates = [];
-  try {
-    const parsed = JSON.parse(candidatesResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    candidates = parsed.candidates ?? [];
-  } catch (error) {
-    log(`Candidate parsing failed (${error.message})`);
-  }
+  let candidates = candidatesResult?.candidates ?? [];
 
   log(`${candidates.length} candidates for deep-dive verification`);
 
@@ -330,18 +368,49 @@ Output JSON:
     {"id": "G1", "members": ["C1", "C2"], "root_cause": "...", "unified_resolution": "..."}
   ]
 }`,
-    { label: "verdict-analysis", phase: "verdict_analysis" },
+    {
+      label: "verdict-analysis",
+      phase: "verdict_analysis",
+      schema: {
+        type: "object",
+        properties: {
+          verdicts: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id:             { type: "string" },
+                verdict:        { type: "string" },
+                severity:       { type: "string" },
+                source_a:       { type: "object" },
+                source_b:       { type: "object" },
+                analysis:       { type: "string" },
+                recommendation: { type: "string" },
+              },
+              required: ["id", "verdict"],
+            },
+          },
+          groups: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id:                 { type: "string" },
+                members:            { type: "array", items: { type: "string" } },
+                root_cause:         { type: "string" },
+                unified_resolution: { type: "string" },
+              },
+              required: ["id", "members"],
+            },
+          },
+        },
+        required: ["verdicts", "groups"],
+      },
+    },
   );
 
-  let verdicts = [];
-  let groups = [];
-  try {
-    const parsed = JSON.parse(verdictsResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    verdicts = parsed.verdicts ?? [];
-    groups = parsed.groups ?? [];
-  } catch (error) {
-    log(`Verdict parsing failed (${error.message})`);
-  }
+  let verdicts = verdictsResult?.verdicts ?? [];
+  let groups   = verdictsResult?.groups   ?? [];
 
   const confirmedVerdicts = verdicts.filter((v) => v.verdict !== "FALSE_POSITIVE");
   log(
@@ -386,16 +455,31 @@ Collect all responses. Output:
     {"issue_id": "C1", "action": "Update README to match implementation", "skip": false}
   ]
 }`,
-    { label: "resolution", phase: "resolution" },
+    {
+      label: "resolution",
+      phase: "resolution",
+      schema: {
+        type: "object",
+        properties: {
+          resolutions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                issue_id: { type: "string" },
+                action:   { type: "string" },
+                skip:     { type: "boolean" },
+              },
+              required: ["issue_id"],
+            },
+          },
+        },
+        required: ["resolutions"],
+      },
+    },
   );
 
-  let resolutions = [];
-  try {
-    const parsed = JSON.parse(resolutionResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    resolutions = parsed.resolutions ?? [];
-  } catch (error) {
-    log(`Resolution parsing failed (${error.message})`);
-  }
+  let resolutions = resolutionResult?.resolutions ?? [];
 
   const activeResolutions = resolutions.filter((r) => !r.skip);
   log(`${activeResolutions.length} issues to apply`);

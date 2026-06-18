@@ -246,11 +246,17 @@ ${HISTORY_TEMPLATE}`,
     { label: "draft", phase: "draft" },
   );
 
-  // ── Phase 4: AI Tells Detection (VERIFICATION) ────────────────────────────
+  // ── Phases 4, 6, 7: AI Tells / Structural / Voice (parallel fan-out) ────────
+  // Phase 5 (positive_markers) reads aiTellsResult and MUST follow Phase 4.
+  // Phases 4, 6, 7 only read draftResult/classificationResult and are mutually
+  // independent, so we fan them out together (DL-T1-03).
   phase("ai_tells_detection");
+  phase("structural_metrics");
+  phase("voice_consistency");
 
-  const aiTellsResult = await agent(
-    `LEON WRITING STYLE — AI Tells Detection [VERIFICATION Phase]
+  const [aiTellsResult, structuralResult, voiceResult] = await parallel([
+    () => agent(
+      `LEON WRITING STYLE — AI Tells Detection [VERIFICATION Phase]
 
 Draft:
 ${draftResult}
@@ -297,10 +303,76 @@ Output table of violations:
 |----------|---------|-------------|------------|
 
 ${HISTORY_TEMPLATE}`,
-    { label: "ai-tells-detection", phase: "ai_tells_detection" },
-  );
+      { label: "ai-tells-detection", phase: "ai_tells_detection" },
+    ),
+    () => agent(
+      `LEON WRITING STYLE — Structural Metrics [VERIFICATION Phase]
+
+Draft:
+${draftResult}
+
+CHECK structural patterns:
+
+<paragraph_structure>
+TARGET: 2-5 sentences per paragraph
+  EXTRACT: Count sentences in each paragraph
+  VIOLATIONS: Paragraphs with 1 sentence (too short) or 6+ sentences (too long)
+  Record: Paragraph range: X-Y sentences
+</paragraph_structure>
+
+<sentence_length_mix>
+TARGET: Mix of short (1-8 words), medium (9-20 words), long (21+ words)
+  EXTRACT: Length of each sentence
+  VIOLATIONS: 3+ consecutive sentences of same length class
+  Record: X% short, Y% medium, Z% long
+</sentence_length_mix>
+
+<opener_analysis>
+FIRST SENTENCE of each paragraph:
+  GROUNDED opener: Specific fact, named entity, concrete situation -> GOOD
+  META-COMMENTARY opener: 'In this section...', 'Now we will...', 'Let's look at...' -> BAD
+  Record: opener type for each paragraph
+</opener_analysis>
+
+Output structural analysis with specific violations.
+
+${HISTORY_TEMPLATE}`,
+      { label: "structural-metrics", phase: "structural_metrics" },
+    ),
+    () => agent(
+      `LEON WRITING STYLE — Voice Consistency [VERIFICATION Phase]
+
+Draft:
+${draftResult}
+
+Classification:
+${classificationResult}
+
+CHECK voice consistency against the content type classification from Step 1:
+
+For each section, verify:
+  | Section | Expected Voice | Actual Voice | Consistent? |
+  |---------|---------------|--------------|-------------|
+  | ...     | ...           | ...          | YES/NO      |
+
+VOICE VIOLATIONS:
+  - NARRATIVE section using third-person passive -> should be first-person
+  - INSTRUCTIONAL section using first-person opinion -> should be imperative
+  - REFERENCE section using second-person -> should be declarative
+
+FLAG any inconsistencies with location and correction needed.
+
+Also check REGISTER CONSISTENCY:
+  - Mixed registers? (philosophical + pop culture = violation)
+  - Register matches claimed register from Step 2?
+
+${HISTORY_TEMPLATE}`,
+      { label: "voice-consistency", phase: "voice_consistency" },
+    ),
+  ]);
 
   // ── Phase 5: Positive Markers (VERIFICATION) ──────────────────────────────
+  // Must run AFTER Phase 4: it reads aiTellsResult to cross-check violations.
   phase("positive_markers");
 
   const markersResult = await agent(
@@ -342,78 +414,6 @@ Verdict: PASS/FAIL (found N, required M minimum across categories)
 
 ${HISTORY_TEMPLATE}`,
     { label: "positive-markers", phase: "positive_markers" },
-  );
-
-  // ── Phase 6: Structural Metrics (VERIFICATION) ────────────────────────────
-  phase("structural_metrics");
-
-  const structuralResult = await agent(
-    `LEON WRITING STYLE — Structural Metrics [VERIFICATION Phase]
-
-Draft:
-${draftResult}
-
-CHECK structural patterns:
-
-<paragraph_structure>
-TARGET: 2-5 sentences per paragraph
-  EXTRACT: Count sentences in each paragraph
-  VIOLATIONS: Paragraphs with 1 sentence (too short) or 6+ sentences (too long)
-  Record: Paragraph range: X-Y sentences
-</paragraph_structure>
-
-<sentence_length_mix>
-TARGET: Mix of short (1-8 words), medium (9-20 words), long (21+ words)
-  EXTRACT: Length of each sentence
-  VIOLATIONS: 3+ consecutive sentences of same length class
-  Record: X% short, Y% medium, Z% long
-</sentence_length_mix>
-
-<opener_analysis>
-FIRST SENTENCE of each paragraph:
-  GROUNDED opener: Specific fact, named entity, concrete situation -> GOOD
-  META-COMMENTARY opener: 'In this section...', 'Now we will...', 'Let's look at...' -> BAD
-  Record: opener type for each paragraph
-</opener_analysis>
-
-Output structural analysis with specific violations.
-
-${HISTORY_TEMPLATE}`,
-    { label: "structural-metrics", phase: "structural_metrics" },
-  );
-
-  // ── Phase 7: Voice Consistency (VERIFICATION) ─────────────────────────────
-  phase("voice_consistency");
-
-  const voiceResult = await agent(
-    `LEON WRITING STYLE — Voice Consistency [VERIFICATION Phase]
-
-Draft:
-${draftResult}
-
-Classification:
-${classificationResult}
-
-CHECK voice consistency against the content type classification from Step 1:
-
-For each section, verify:
-  | Section | Expected Voice | Actual Voice | Consistent? |
-  |---------|---------------|--------------|-------------|
-  | ...     | ...           | ...          | YES/NO      |
-
-VOICE VIOLATIONS:
-  - NARRATIVE section using third-person passive -> should be first-person
-  - INSTRUCTIONAL section using first-person opinion -> should be imperative
-  - REFERENCE section using second-person -> should be declarative
-
-FLAG any inconsistencies with location and correction needed.
-
-Also check REGISTER CONSISTENCY:
-  - Mixed registers? (philosophical + pop culture = violation)
-  - Register matches claimed register from Step 2?
-
-${HISTORY_TEMPLATE}`,
-    { label: "voice-consistency", phase: "voice_consistency" },
   );
 
   // ── Phase 8: Refinement ───────────────────────────────────────────────────
