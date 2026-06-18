@@ -11,6 +11,7 @@
     "//": "defaultMode 'auto' routes tool calls through the classifier, which already blocks irreversible/destructive actions (e.g. git push --force, git reset --hard) and anything aimed outside the environment. No permissions.deny git rules are added: prefix-matched Bash globs are leaky (miss trailing-flag forms) and redundant with the classifier. Tighten via autoMode.soft_deny prose rules if a specific destructive pattern slips through.",
     "defaultMode": "auto"
   },
+  "skipWorkflowUsageWarning": true,
   "skillRuns": {
     "baseDir": "~/.claude/skill-runs",
     "retentionDays": 7,
