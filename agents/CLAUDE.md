@@ -1,9 +1,9 @@
 # agents/
 
-Subagent definitions (system prompts + frontmatter) for the six registered agent
+Subagent definitions (system prompts + frontmatter) for the seven registered agent
 types. All are leaf workers — `disallowedTools: Agent` (or a `tools` allowlist that
-omits `Agent`) prevents them from spawning subagents. `architect` and `researcher`
-are read-only (`tools: Read, Grep, Glob, Bash`); the rest retain Write/Edit.
+omits `Agent`) prevents them from spawning subagents. `architect`, `researcher`, and
+`scout` are read-only (`tools: Read, Grep, Glob, Bash`); the rest retain Write/Edit.
 
 ## Files
 
@@ -14,4 +14,5 @@ are read-only (`tools: Read, Grep, Glob, Bash`); the rest retain Write/Edit.
 | `developer.md`         | Developer agent: spec-faithful implementation, scope rules       | Modifying developer behavior, understanding spec-adherence rules         |
 | `quality-reviewer.md`  | Quality reviewer: RULE 0/1/2 hierarchy, findings format          | Modifying QR behavior, understanding review rules, adding finding categories |
 | `researcher.md`        | Researcher agent: read-only adversarial critique, divergent reasoning, investigation | Modifying researcher behavior, understanding the read-only worker role for adversarial skills |
+| `scout.md`             | Scout agent: cheap read-only Investigate→Verify→Report; registered home for the `scout` agentType used by codebase-analysis/refactor/incoherence | Modifying scout behavior, understanding the read-only investigation contract |
 | `technical-writer.md`  | Technical writer: LLM-optimized docs, forbidden patterns         | Modifying TW behavior, understanding documentation output format         |

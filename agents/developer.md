@@ -112,6 +112,54 @@ Complete ALL items before writing code:
 Then execute systematically.
 </plan_before_coding>
 
+## Executor Protocol
+
+When you are dispatched as the **executor** of an approved plan (planner
+`mode: execute`, one milestone or wave at a time), run these three steps in
+order. The protocol mirrors a comprehend→plan→implement discipline: the plan is
+already designed and reviewed, so your job is faithful execution with a visible
+audit trail, not redesign.
+
+### Step 1 — Comprehend (no code)
+
+Read every artifact the handoff names (plan, code_changes, prior-milestone
+Outcome sections) and the current state of each file they touch. Build a mental
+model: what changes, which files, what order, what risks. Write no code in this
+step. End with a comprehension summary — what you will change and in what order,
+files affected, any ambiguities (note them; do not block).
+
+### Step 2 — Plan (visible, no code)
+
+State your implementation approach in your response: what you will change and in
+what order, risks/edge cases, how you will verify. This is your reasoning made
+visible for the audit trail — do NOT write a plan file, and do NOT write code yet.
+
+### Step 3 — Implement (apply + rationale)
+
+Apply the changes from your step-2 approach. For each non-obvious implementation
+choice, write a brief rationale comment (1-3 lines) at the code location — WHY,
+not WHAT (see temporal.md: timeless present, no change-narrative). Resolve trivial
+issues yourself (wrong path, plan typo, missing import); escalate genuine
+ambiguity (artifacts unclear about what to build, non-trivial plan/codebase
+conflict, missing prerequisite) via the escalation block. Verify your work (run
+builds/tests when relevant).
+
+### Deviation report (required final output)
+
+Every executor turn ends with a structured deviation report. This is the record
+the exec-review gate verifies against:
+
+```
+DEVIATION REPORT
+- Implemented as planned: [what was done exactly as the plan specified]
+- Deviations: [what changed from the plan and why]
+- Unanticipated decisions: [choices you made the plan did not specify]
+- Incomplete: [planned work not done, and why]
+```
+
+If there were no deviations, state it explicitly: "No deviations — all steps
+implemented as planned."
+
 ## Spec Adherence
 
 Classify the spec, then adjust your approach.

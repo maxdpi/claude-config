@@ -370,9 +370,9 @@ def test_planner_workflow_durable_event_wiring() -> None:
     for cross-session resume (DL-006, DL-013, DL-014).
 
     Validates WITHOUT executing a live Workflow run:
-    1. meta.phases declares all 8 planner phases.
+    1. meta.phases declares all planner phases (3 intake + 6 work/qr).
     2. meta.phaseTrust maps every phase to a valid tag (read_only | execute).
-    3. The read_only phases are exactly plan-init and context-verify (safe to
+    3. The read_only phases are exactly the three intake phases (safe to
        auto-replay on resume per DL-006).
     4. The execute phases are the six work/qr phases (require confirmation).
     5. The source text references the DURABLE_EVENT log markers that the
@@ -390,8 +390,9 @@ def test_planner_workflow_durable_event_wiring() -> None:
 
     # ── 1. meta.phases present ────────────────────────────────────────────────
     expected_phases = [
-        "plan-init",
-        "context-verify",
+        "intake-gather",
+        "intake-deepen",
+        "intake-summarize",
         "plan-design-work",
         "plan-design-qr",
         "plan-code-work",
@@ -412,14 +413,14 @@ def test_planner_workflow_durable_event_wiring() -> None:
         "planner workflow.mjs must declare meta.phaseTrust for resume engine (DL-014)"
     )
     assert '"read_only"' in source, (
-        "planner workflow.mjs phaseTrust must include 'read_only' tag for plan-init/context-verify (DL-006)"
+        "planner workflow.mjs phaseTrust must include 'read_only' tag for the intake phases (DL-006)"
     )
     assert '"execute"' in source, (
         "planner workflow.mjs phaseTrust must include 'execute' tag for work/qr phases (DL-006)"
     )
     # Verify the specific read_only phases appear near the read_only tag
     # by checking the overall content contains these phase names with read_only
-    read_only_phases = ["plan-init", "context-verify"]
+    read_only_phases = ["intake-gather", "intake-deepen", "intake-summarize"]
     for ph in read_only_phases:
         assert f'"{ph}"' in source, (
             f"planner workflow.mjs phaseTrust must list '{ph}' (DL-006)"

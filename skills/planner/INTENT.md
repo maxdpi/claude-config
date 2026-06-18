@@ -2,6 +2,18 @@
 
 Authoritative design specification for the planner skill. This document governs WHY the system works the way it does. Implementation MUST conform to this spec.
 
+> **Runtime note (native port).** The active runtime is `workflow.mjs` (Workflow
+> tool); the per-step Python orchestrator this spec describes is retired. The
+> port also evolved the phase sequence: the old `plan-init` + `context-verify`
+> capture is replaced by the intake shape `intake-gather → intake-deepen →
+> intake-summarize` (Gather/Deepen/Summarize, see `conventions/intake.md`), the
+> design phase emits Mermaid diagram slots (`conventions/visualization.md`), the
+> QR gates apply rewrite-or-loop-back (`conventions/producer-validator.md`), and
+> two new modes exist beyond `plan`: `execute` (executor + exec-review) and
+> `milestones` (the cross-milestone learning loop, `conventions/milestones.md`).
+> Where this spec and `workflow.mjs` disagree on phase names or mode set, the
+> `.mjs` is authoritative.
+
 ## Philosophy
 
 Three principles govern this design:

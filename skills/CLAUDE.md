@@ -41,6 +41,8 @@ Failure to follow these patterns creates technical debt and inconsistency across
 | `leon-writing-style/` | Style-matched content generation          | Writing content matching user's style    |
 | `arxiv-to-md/`        | arXiv paper to markdown conversion        | Converting papers for LLM consumption    |
 | `cc-history/`         | Claude Code conversation history analysis | Querying past conversations, token usage |
+| `discovery/`          | Open-ended interactive exploration (frame loop) | Thinking out loud before committing to a workflow |
+| `curation/`           | Deliberate-memory proposal loop (human-approved) | Capturing cross-run learning into memory |
 
 ## Native Runtimes (ported skills)
 
@@ -71,6 +73,18 @@ registered agent types (`researcher`, `quality-reviewer`, etc.):
 | problem-analysis | `skills/problem-analysis/SKILL.md`  | investigators × N (`researcher`)         |
 
 Durable phase-boundary events are written under `skills/scripts/skills/lib/workflow/persistence/` on both paths.
+
+## Interactive skills (lead-orchestrated, `SKILL.md`)
+
+Two skills are interactive rather than fan-out: the lead (main session) drives a
+dialogue and parks for the user between turns/batches, so they have no
+`workflow.mjs` (a Workflow tool run is autonomous and cannot park). They are not
+ports — they add koan workflow shapes this repo lacked.
+
+| Skill       | Entry point                  | Shape                                                          |
+| ----------- | ---------------------------- | ------------------------------------------------------------- |
+| discovery   | `skills/discovery/SKILL.md`  | Single-phase `frame` loop; refuses nothing; three negotiated exits (promote / hand off / end). |
+| curation    | `skills/curation/SKILL.md`   | Inventory -> Memorize batch loop; proposes memory entries for human approval (no silent writes). |
 
 ## Non-ported skills (Python CLI still active)
 

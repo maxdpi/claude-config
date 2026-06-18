@@ -202,7 +202,7 @@ FINDING 1: A=[file:line] B=[file:line] Conflict=[desc] Confidence=[h/m/l]
         {
           label: `broad-sweep-${dim.letter}`,
           phase: "broad_sweep",
-          agentType: "Explore",
+          agentType: "scout",
           model: "haiku",
         },
       )
@@ -285,7 +285,7 @@ ANALYSIS: {why conflict} | RECOMMENDATION: {fix}`,
         {
           label: `deep-dive-${cand.id}`,
           phase: "deep_dive",
-          agentType: "Explore",
+          agentType: "scout",
           model: "sonnet",
         },
       )

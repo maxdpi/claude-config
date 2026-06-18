@@ -122,6 +122,7 @@ sources:
 | Severity definitions | <file working-dir=".claude" uri="conventions/severity.md" />            | Assigning MUST/SHOULD/COULD severity    |
 | Intent markers       | <file working-dir=".claude" uri="conventions/intent-markers.md" />      | Validating :PERF:/:UNSAFE: markers      |
 | Documentation format | <file working-dir=".claude" uri="conventions/documentation.md" />       | Reviewing CLAUDE.md/README.md structure |
+| Review semantics     | <file working-dir=".claude" uri="conventions/producer-validator.md" />  | Classifying findings internal/new-files |
 | User preferences     | <file working-dir=".claude" uri="CLAUDE.md" />                          | ASCII preference, markdown hygiene      |
 
 Read the referenced file when the convention applies to your current task.
@@ -272,6 +273,22 @@ categories. For authoritative specification:
 
 ---
 
+## Rewrite-or-Loop-Back Classification
+
+When you review a producer's artifact (a plan design, code_changes, or doc_diffs
+in a producer–validator gate), classify **each** finding per
+`conventions/producer-validator.md`:
+
+- **INTERNAL** — the producer could have caught this from the context it already
+  loaded (its own artifact body plus the inputs it was handed). Fixable in place.
+- **NEW-FILES-NEEDED** — catching it requires loading a file the producer never
+  opened. Name that file. The gate loops back to the producer.
+
+Default to INTERNAL when uncertain; reserve NEW-FILES-NEEDED for findings where
+you can name the file the producer would have to read. This classification drives
+whether the gate applies an in-place fix or re-dispatches the producer, so it is
+mandatory in producer–validator reviews (omit it for free-form code review).
+
 ## Output Format
 
 Produce ONLY this structure. No preamble.
@@ -281,21 +298,28 @@ STATUS: [COMPLETE | BLOCKED | ESCALATED]
 
 VERDICT: [PASS | PASS_WITH_CONCERNS | NEEDS_CHANGES | MUST_ISSUES]
 
+LOOP_BACK: [NONE | NEW-FILES-NEEDED]   # NONE when PASS or all findings INTERNAL
+
 STANDARDS: [List or "None found, applying RULE 0+2"]
 
 FINDINGS:
 ### [CATEGORY SEVERITY]: [Title]
 - Location: [file:line]
+- Class: [INTERNAL | NEW-FILES-NEEDED]
 - Issue: [description]
 - Failure Mode: [consequence]
-- Fix: [action]
+- Fix: [in-place correction]
+- Needs: [file/info the producer must load — only for NEW-FILES-NEEDED]
 
 REASONING: [Max 30 words]
 
 NOT_FLAGGED: [Pattern -> rationale, one line each]
 ```
 
-Order findings by severity (MUST, SHOULD, COULD), then category.
+Order findings by severity (MUST, SHOULD, COULD), then category. The `LOOP_BACK`
+line is the gate's machine-readable signal: emit `NEW-FILES-NEEDED` if any finding
+carries that class, otherwise `NONE`. Omit the `Class`/`Needs`/`LOOP_BACK` fields
+only in free-form (non-producer–validator) review.
 
 ---
 
