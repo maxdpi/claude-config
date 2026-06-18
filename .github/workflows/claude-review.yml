@@ -37,6 +37,10 @@ jobs:
           plugins: "code-review@claude-code-plugins"
           prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment"
 
-          # --debug: temporary, surfaces the exact API/auth error in the run log.
+          # Temporary diagnostics: the action masks SDK output by default
+          # ("full output hidden for security"), so --debug alone isn't enough.
+          # show_full_output: true unmasks the real API/auth error in the log.
+          # Remove both once auth is settled.
+          show_full_output: true
           claude_args: |
             --debug
