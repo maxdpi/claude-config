@@ -3,361 +3,269 @@
 > **This is a fork of [solatis/claude-config](https://github.com/solatis/claude-config).**
 > It keeps the upstream philosophy (planning before execution, context hygiene,
 > review cycles) but re-platforms the entire skills suite onto Claude Code's
-> **native orchestration runtimes** and adds a **durable, cross-session skill-run
-> persistence substrate**. See [What This Fork Changes](#what-this-fork-changes)
-> for the full list. Original credit for the philosophy and the first generation
-> of skills goes to the upstream author.
-
-I use Claude Code for most of my work. After months of iteration, I noticed a
-pattern: LLM-assisted code rots faster than hand-written code. Technical debt
-accumulates because the LLM does not know what it does not know, and neither do
-you until it is too late.
-
-This repo is my solution: skills and workflows that force planning before
-execution, keep context focused, and catch mistakes before they compound.
-
-## What This Fork Changes
-
-Upstream orchestrated multi-phase skills through a Python CLI runtime: each skill
-re-invoked itself with `--step N`, and a `subagent.py` emitted prose dispatch
-directives to coordinate fan-out. That re-invocation loop was the *only* thing
-giving skills cross-session durability. This fork removes that runtime entirely
-and rebuilds the capability on native primitives. The high-level changes:
-
-- **Native-runtime port of all 10 skills.** Linear/staged skills
-  (`codebase-analysis`, `refactor`, `planner`, `arxiv-to-md`, `incoherence`,
-  `prompt-engineer`, `leon-writing-style`) now run on the **Workflow tool**
-  (`workflow.mjs`); divergent/adversarial skills (`decision-critic`, `deepthink`,
-  `problem-analysis`) now run on **Agent Teams** (`SKILL.md`). The Python `--step`
-  CLI, the `--step` re-invocation loop, and the `subagent.py` dispatch-prose
-  machinery are deleted.
-- **Durable skill-run persistence substrate.** A thin external store at
-  `~/.claude/skill-runs/<run_id>/` (append-only `events.jsonl` → pure fold →
-  `projection.json` + `run-state.json`, all atomic writes) records native runtime
-  state and survives crashes, `/clear`, and session exit — the cross-session
-  resume the native runtimes lack on their own.
-- **Run-management slash commands:** `/runs`, `/run-status <id>`, and a
-  phase-aware `/resume <id>` with a default-deny consent gate.
-- **`settings.json` hook wiring** that mirrors runtime state *out* into the
-  substrate (`SessionStart`/`Stop`/`SessionEnd`, `SubagentStart`/`SubagentStop`,
-  `TaskCreated`/`TaskCompleted`/`TeammateIdle`).
-- **Agent Teams bridge** that captures Agent Teams runs into the substrate, with
-  graceful degradation to Workflow tool + subagents when Agent Teams is disabled.
-- **New skill** `leon-writing-style` and a new **`researcher`** subagent.
-- **Vendored official Claude Code docs** (`docs/claude-code/`, ~150 files) plus a
-  refresh script, so the suite can be built and reviewed against a pinned copy of
-  the platform docs.
-- **A pytest substrate test harness** (`tests/`) — persistence core, hook
-  adapters, resume engine, port-parity fixtures, plus property and chaos layers.
-- **19 per-directory `CLAUDE.md` indexes** added across the tree for context
-  hygiene, and `sync.sh` for installing the config into `~/.claude`.
-
-The sections below ("Why This Exists", "Principles", "Usage") describe the
-inherited philosophy. The fork-specific machinery is detailed under
-[Architecture: Native Runtimes + Durable Substrate](#architecture-native-runtimes--durable-substrate).
-
-## Why This Exists
-
-LLM-assisted coding fails long-term. Technical debt accumulates because the LLM
-cannot see it, and you are moving too fast to notice. I treat this as an
-engineering problem, not a tooling problem.
-
-LLMs are tools, not collaborators. When an engineer says "add retry logic",
-another engineer infers exponential backoff, jitter, and idempotency. An LLM
-infers nothing you do not explicitly state. It cannot read the room. It has no
-institutional memory. It will cheerfully implement the wrong thing with perfect
-confidence and call it "production-ready".
-
-Larger context windows do not help. Giving an LLM more text is like giving a
-human a larger stack of papers; attention drifts to the beginning and end, and
-details in the middle get missed. More context makes this worse. Give the LLM
-exactly what it needs for the task at hand -- nothing more.
-
-## Principles
-
-This workflow is built on four principles.
-
-### Context Hygiene
-
-Each task gets precisely the information it needs -- no more. Sub-agents start
-with a fresh context, so architectural knowledge must be encoded somewhere
-persistent.
-
-I use a two-file pattern in every directory:
-
-**CLAUDE.md** -- Claude loads these automatically when entering a directory.
-Because they load whether needed or not, content must be minimal: a tabular
-index with short descriptions and triggers for when to open each file. When
-Claude opens `app/web/controller.py`, it retrieves just the indexes along that
-path -- not prose it might never need.
-
-**README.md** -- Invisible knowledge: architecture decisions, invariants not
-apparent from code. The test: if a developer could learn it by reading source
-files, it does not belong here. Claude reads these only when the CLAUDE.md
-trigger says to.
-
-The principle is just-in-time context. Indexes load automatically but stay
-small. Detailed knowledge loads only when relevant.
-
-The technical writer agent enforces token budgets: ~200 tokens for CLAUDE.md,
-~500 for README.md, 100 for function docs, 150 for module docs. These limits
-force discipline -- if you are exceeding them, you are probably documenting what
-code already shows. Function docs include "use when..." triggers so the LLM
-knows when to reach for them.
+> **native orchestration runtimes** — the Workflow tool and Agent Teams — and adds
+> a **durable, cross-session skill-run persistence substrate**. Original credit for
+> the philosophy and the first generation of skills goes to the upstream author.
 
-The planner workflow maintains this hierarchy automatically. If you bypass the
-planner, you maintain it yourself.
+This repo is a configuration directory for [Claude Code](https://claude.com/claude-code).
+It installs a suite of **skills** (multi-phase agent workflows), a roster of
+**subagents** (specialized leaf workers), a set of **slash commands**, shared
+**conventions**, and a persistence layer that lets long-running skill runs survive
+crashes, `/clear`, and session exit.
 
-### Planning Before Execution
+The rest of this document is a **reference for everything this config exposes**:
+every skill (and which runtime drives it), every subagent, every command, and the
+substrate that ties them together. For the design philosophy behind the workflow,
+jump to [Philosophy](#philosophy).
 
-LLMs make first-shot mistakes. Always. The workflow separates planning from
-execution, forcing ambiguities to surface when they are cheap to fix.
+---
 
-Plans capture why decisions were made, what alternatives were rejected, and what
-risks were accepted. Plans are written to files. When you clear context and
-start fresh, the reasoning survives.
+## Contents
 
-### Review Cycles
+- [Mental Model: Skills, Workflows, Teams, Subagents](#mental-model-skills-workflows-teams-subagents)
+- [Skill Reference](#skill-reference)
+  - [Linear workflow skills](#linear-workflow-skills-workflow-tool)
+  - [Adversarial team skills](#adversarial-team-skills-agent-teams)
+  - [Interactive & utility skills](#interactive--utility-skills)
+- [Subagent Reference](#subagent-reference)
+- [Slash Commands](#slash-commands)
+- [The Durable Substrate](#the-durable-substrate)
+- [Installation & Configuration](#installation--configuration)
+- [Philosophy](#philosophy)
+- [Repository Layout](#repository-layout)
 
-Execution is split into milestones -- smaller units that are manageable and can
-be validated individually. This ensures continuous, verified progress. Without
-it, execution becomes a waterfall: one small oversight early on and agents
-compound each mistake until the result is unusable.
+---
 
-Quality gates run at every stage. A technical writer agent checks clarity; a
-quality reviewer checks completeness. The loop runs until both pass.
+## Mental Model: Skills, Workflows, Teams, Subagents
 
-Plans pass review before execution begins. During execution, each milestone
-passes review before the next starts.
+Four concepts, layered:
 
-### Cost-Effective Delegation
+| Concept | What it is | How it runs |
+| --- | --- | --- |
+| **Skill** | A named, invocable capability (`Use your <name> skill…` or `/<name>`). The unit you reach for. | Backed by either a workflow or a team. |
+| **Workflow** | A *linear/staged* skill: deterministic JS (`workflow.mjs`) that drives phases through the **Workflow tool**, fanning out to subagents. | Workflow tool; journal-based, same-session resume. |
+| **Team** | An *adversarial/divergent* skill: the **lead** (your main session) reads a `SKILL.md` and orchestrates **teammates** in natural language via **Agent Teams**. | Agent Teams (env-gated); degrades to Agent-tool subagents when disabled. |
+| **Subagent** | A specialized leaf worker (`agents/*.md`) with its own model, tools, and system prompt. Workflows and teams both dispatch to these. | Spawned per task; ephemeral, report-back only. |
 
-The orchestrator delegates to smaller agents -- Haiku for straightforward tasks,
-Sonnet for moderate complexity. Prompts are injected just-in-time, giving
-smaller models precisely the guidance they need at each step.
+The split that matters most: **a skill is either a Workflow or a Team.**
 
-When quality review fails or problems recur, the orchestrator escalates to
-higher-quality models. Expensive models are reserved for genuine ambiguity, not
-routine work.
+- A skill backed by a `workflow.mjs` is a **Workflow skill** — its control flow is
+  code: fixed phases, parallel fan-out, pipelines. Good when the *shape* of the work
+  is known in advance (survey → deepen → synthesize).
+- A skill backed only by a `SKILL.md` orchestration prompt is a **Team skill** — its
+  control flow is the lead reasoning in natural language, spawning teammates,
+  reading their findings, and adapting. Good when the work is *adversarial or
+  divergent* (generate competing hypotheses, critique, synthesize a verdict).
 
-## Does This Actually Work?
+> **Note on the dual presence:** Several Workflow skills ship *both* a `SKILL.md`
+> (the front-door description + invocation contract) and a `workflow.mjs` (the
+> deterministic backend). The `SKILL.md` is the entry point; the `.mjs` is what
+> actually executes the phases.
 
-I have not run formal benchmarks. I can only tell you what I have observed using
-this workflow to build and maintain non-trivial applications entirely with
-Claude Code -- backend systems, data pipelines, streaming applications in C++,
-Python, and Go.
+Both runtimes emit identical **durable events** to the substrate, so
+[resume](#the-durable-substrate) works the same regardless of which one drives a skill.
 
-The problems I used to hit constantly are gone:
+---
 
-**Ambiguity resolution.** You ask an LLM "make me a sandwich" and it comes back
-with a grilled cheese. Technically correct. Not what you meant. The planning
-phase forces these misunderstandings to surface before you have built the wrong
-thing.
+## Skill Reference
 
-**Code hygiene.** Without review cycles, the same utility function gets
-reimplemented fifteen times across a codebase. The quality reviewer catches
-this. The technical writer ensures documentation stays consistent.
+Invoke any skill conversationally (`Use your refactor skill on src/`) or, where a
+slash command exists, with `/<name>`. Skills marked **"Invoke IMMEDIATELY"** in their
+description should be launched *before* exploring — the skill itself orchestrates the
+exploration.
 
-**LLM-navigable documentation.** Function docs include "use when..." triggers.
-CLAUDE.md files tell the LLM which files matter for a given task. The LLM stops
-guessing which code is relevant.
+### Linear workflow skills (Workflow tool)
 
-Is it better than writing code by hand? I think so, but I cannot speak for
-everyone. This workflow is opinionated. I am a backend engineer -- the patterns
-should apply to frontend work, but I have not tested that. If you are less
-experienced with software engineering, I would like to know whether this helps
-or adds overhead.
+These run `workflow.mjs` on the Workflow tool. Each declares a `phases` list and a
+`phaseTrust` table (which phases are `read_only` vs `write`/`execute`) — the table is
+the single source of truth the resume engine uses to decide what to auto-replay.
 
-If you are serious about LLM-assisted coding and want to try a structured
-approach, give it a shot. I would like to hear what works and what does not.
+#### `planner` — plan then execute, with review gates
 
-## Quick Start
+The centerpiece. Interactive planning and execution for complex tasks. It never
+writes code directly; it delegates to subagents and runs every milestone through
+review before the next begins.
 
-Clone the fork into your Claude Code configuration directory:
+- **Phases:** `intake-gather → intake-deepen → intake-summarize → plan-design → plan-code → plan-docs` (each plan phase paired with a `-qr` quality-review pass) `→ execute → exec-review → milestone-validate / -plan / -outcome / -propagate`. Initiative mode adds upstream `core-flows` and `tech-plan` phases.
+- **Subagents:** `developer` (implementation), `technical-writer` (docs/clarity), `quality-reviewer` (completeness/risk), `architect`/`debugger` as needed.
+- **Use it for:** any non-trivial change. Write the plan, `/clear`, then execute.
+- **Invoke:** `Use your planner skill to write a plan to plans/feature.md` · `…to execute plans/feature.md` · `argument-hint: [task] [plan|execute|milestones]`
 
-```bash
-# Per-project
-git clone https://github.com/jeanbrazeau/claude-config .claude
+#### `codebase-analysis` — understand a codebase
 
-# Global (new setup)
-git clone https://github.com/jeanbrazeau/claude-config ~/.claude
+Systematic, orchestrated exploration for architecture comprehension and repository
+orientation. **Comprehension only** — for code-quality judgments use `refactor`; for
+single-file bug hunts use the `debugger`.
 
-# Global (existing ~/.claude)
-cd ~/.claude
-git remote add workflow https://github.com/jeanbrazeau/claude-config
-git fetch workflow
-git merge workflow/main --allow-unrelated-histories
-```
+- **Phases:** `scope → survey → deepen → synthesize`
+- **Use it for:** "how does this work / how is it structured" on an unfamiliar or large surface.
+- **Invoke:** `Use your codebase analysis skill to explore <path/topic>`
 
-If you clone elsewhere, install the config dirs into `~/.claude` with the
-included installer (it `rsync --delete`s the tracked directories into place):
+#### `refactor` — find technical debt
 
-```bash
-./sync.sh
-```
+Explores code-quality dimensions in parallel (naming, extraction, types, errors,
+modules, architecture, abstraction), validates findings against evidence, and outputs
+**prioritized recommendations**. It does not write code — it tells you what to fix and
+why. **Improvement judgments only** — for neutral orientation use `codebase-analysis`.
 
-The skill-run substrate is wired through hooks in `settings.json`, which expect
-the Python helpers at `~/.claude/skills/scripts/`. After installing globally the
-hooks fire automatically; no extra setup is needed. The persistence/orchestration
-substrate has its own test suite:
+- **Phases:** `mode_selection → dispatch → triage → cluster → contextualize → synthesize`
+- **Invoke:** `Use your refactor skill on src/services/` (optionally `-- focus on <area>`)
 
-```bash
-PYTHONPATH=skills/scripts python3 -m pytest tests/ -q
-```
+#### `incoherence` — do docs and code agree?
 
-### Configuration
+Detects and resolves contradictions between an implementation and its stated intent
+(docs, specs, comments). A broad sweep followed by targeted deep dives and a resolution pass.
 
-`settings.json` exposes the substrate knobs:
+- **Phases:** `survey → dimension_select → broad_sweep → synthesize_candidates → deep_dive → verdict_analysis → resolution → application → report`
+- **Invoke:** `Use your incoherence skill to check whether the docs match the code in <area>`
 
-- `skillRuns.baseDir` — where runs are stored (default `~/.claude/skill-runs`).
-- `skillRuns.retentionDays` — TTL for **done** runs only; crashed/incomplete runs
-  are kept indefinitely (they are the resumable ones).
-- `skillRuns.copyTranscript` — copy the native subagent transcript into the run
-  dir on `SubagentStop` (default `true`); set `false` to rely solely on native
-  transcripts.
-- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — opt into Agent Teams mode for the
-  adversarial skills. When unset, those skills degrade gracefully to the Workflow
-  tool + Agent-tool subagents; resume semantics are identical in both modes.
+#### `prompt-engineer` — optimize prompts
 
-## Usage
+Analyzes prompts, proposes changes with explicit pattern attribution, and **waits for
+approval** before applying. Useful for tuning subagent definitions and skill prompts.
+(This skill was optimized using itself.)
 
-The workflow for non-trivial changes: explore -> plan -> execute.
+- **Phases:** `triage → assess → plan → draft → refine → approve → execute`
+- **Invoke:** `Use your prompt engineer skill to optimize agents/developer.md`
 
-**1. Explore the problem.** Understand what you are dealing with. Figure out the
-solution.
+#### `arxiv-to-md` — papers to markdown
 
-This is relatively free-form. If the project and/or surface area is particularly
-large, use the `codebase-analysis` skill to explore the project's code properly
-before proposing a solution.
+Converts arXiv papers into LLM-consumable markdown. Also syncs a folder of PDFs to a
+markdown destination.
 
-**2. (Optional) Think it through.** I reach for `deepthink` very often, more than
-any other skill. It handles analytical questions where you do not know the answer
-structure yet -- taxonomy design, trade-offs, definitional questions, evaluative
-judgments, exploratory investigations.
+- **Phases:** `discover → convert → finalize`
+- **Invoke:** `Use your arxiv-to-md skill on <arXiv ID/URL>` (or `/arxiv-to-md`)
 
-It auto-detects complexity. Quick mode reasons directly. Full mode launches
-parallel sub-agents with different analytical perspectives, then synthesizes
-through agreement patterns. Both self-verify.
+#### `leon-writing-style` — style-matched writing
 
-So, for most analytical questions, deepthink is enough. It explores your
-codebase when context is missing. Reach for specialized skills only when the
-question is clearly scoped:
+A staged writing workflow (new in this fork) that *generates* content matched to a
+voice rather than analyzing it, with explicit AI-tell detection and voice-consistency checks.
 
-- `problem-analysis`: Root cause analysis specifically
-- `decision-critic`: Stress-testing a specific decision
+- **Phases:** `content_classification → purpose_audience → draft → ai_tells_detection → positive_markers → structural_metrics → voice_consistency → refinement → final_review`
+- **Invoke:** `Use your leon-writing-style skill to draft <content>`
 
-**3. Write a plan.** "Use your planner skill to write a plan to
-plans/my-feature.md"
+### Adversarial team skills (Agent Teams)
 
-The planner runs your plan through review cycles -- technical writer for
-clarity, quality reviewer for completeness -- until it passes.
+These run with **no `workflow.mjs`** and **no `team.md`**. The lead reads `SKILL.md`
+and orchestrates teammates in natural language. Gated on
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`: when set, workers are Agent Teams teammates;
+when unset, they degrade gracefully to Agent-tool subagents. Resume semantics are
+identical in both modes.
 
-The planner captures all decisions, tradeoffs, and information not visible from
-the code so that this context does not get lost.
+#### `deepthink` — structured divergent reasoning
 
-**4. Clear context.** `/clear` -- start fresh. You have written everything
-needed into the plan.
+The most-reached-for skill for open-ended analytical questions where you don't yet know
+what shape the answer takes — trade-offs, taxonomy design, evaluative judgments,
+strategy comparison, architecture decisions. The lead clarifies context, designs
+sub-questions, dispatches divergent reasoners, then synthesizes a **confidence-rated**
+answer through agreement patterns.
 
-**5. Execute.** "Use your planner skill to execute plans/my-feature.md"
+- **Worker roles:** divergent-reasoners × 3 (`researcher`)
+- **Invoke:** `Use your deepthink skill to think through <question>`
 
-The planner delegates to sub-agents. It never writes code directly. Each
-milestone goes through the developer, then the technical-writer and
-quality-reviewer. No milestone starts until the previous one passes review.
+#### `decision-critic` — stress-test a decision
 
-Where possible, it executes multiple tasks in parallel.
+Adversarial critique of a specific decision or claim. The lead spawns workers to attack
+it from independent angles, then synthesizes a verdict.
 
-For detailed breakdowns of each skill, see their READMEs:
+- **Worker roles:** verifier (`quality-reviewer`), challenger (`researcher`)
+- **Invoke:** `Use your decision-critic skill on <decision or claim>`
 
-- [DeepThink](skills/deepthink/README.md)
-- [Codebase Analysis](skills/codebase-analysis/README.md)
-- [Problem Analysis](skills/problem-analysis/README.md)
-- [Decision Critic](skills/decision-critic/README.md)
-- [Planner](skills/planner/README.md)
+#### `problem-analysis` — root-cause analysis
 
-### In Practice
+Identifies root causes via competing hypotheses and iterative investigation. The lead
+gates the problem, forms hypotheses, dispatches investigators to gather evidence, then
+formulates the root cause.
 
-I needed to migrate a legacy C# Windows Service from print-based logging to
-something that actually rotates files.
+- **Worker roles:** investigators × N (`researcher`)
+- **Invoke:** `Use your problem analysis skill to find why <symptom>`
 
-The codebase had a homegrown Log() method writing to a single file with
-File.AppendAllText. No rotation, no log levels, synchronous I/O blocking the
-thread. Six Console.WriteLine calls scattered elsewhere went nowhere when
-running as a service.
+**Choosing among the three:** `deepthink` is the general analytical front door (no
+fixed answer structure). Reach for `problem-analysis` when the question is specifically
+*why is this broken*, and `decision-critic` when you have a *specific decision* to
+pressure-test.
 
-I started with exploration and analysis in a single prompt:
+### Interactive & utility skills
 
-```
-Use your codebase analysis skill to briefly explore this C# project,
-with a focus on all the places where debug logs are currently emitted.
+#### `discovery` — open-ended exploration front door
 
-Then use your problem analysis skill to think through an appropriate
-logging framework:
- * must work with .NET Framework 4.8.1
- * must support log rotation out of the box
- * we run multiple processes on the same machine, so it needs structured
-   multi-process support
-```
+Single-phase interactive **frame loop** for thinking out loud — feature-design
+questions, bug hunts, troubleshooting, general Q&A. It refuses nothing, **parks after
+every turn** awaiting your input, and **never auto-advances** to a structured workflow.
+The escape hatch when you don't want to commit to a skill yet; negotiate an exit when ready.
 
-The codebase analysis found 31 call sites and the Console.WriteLine leakage. The
-problem analysis evaluated NLog, Serilog, log4net, and
-Microsoft.Extensions.Logging against my constraints.
+- **Invoke:** `/discovery <topic>` or `Use your discovery skill`
 
-The recommendation was NLog. It handles rotation and async out of the box.
-Multi-process support comes from layout variables. Serilog would work but
-requires three packages for the same functionality.
+#### `curation` — propose durable memory (human-approved)
 
-I agreed with the recommendation. Not a complicated decision, so I skipped the
-`decision-critic` and moved to planning:
+Deliberate cross-run learning. The lead runs a batch loop: inventory candidate
+learnings, self-critique each draft against the memory-entry gate, propose, and write
+**only what you approve**. Nothing is written to memory silently.
 
-```
-Use your planner skill to write an implementation plan to: plan-logging.md
-```
+- **Invoke:** `Use your curation skill` · `argument-hint: [postmortem | review | document <source> | bootstrap]`
 
-The planner surfaced two ambiguities:
+#### `doc-sync` — synchronize documentation
 
-1. Replace all Log() call sites, or just the implementation? Obvious to a human,
-   but worth clarifying upfront.
-2. Log rotation defaults. The planner assumed 1-day rotation, but I also need
-   size-based rotation at 1GB.
+Audits and synchronizes the CLAUDE.md / README.md hierarchy across a repository so
+indexes and per-directory docs stay consistent with the file tree. Primarily for
+bootstrapping the workflow on an existing repo or recovering after a large refactor.
+(If you use `planner` consistently, `technical-writer` keeps docs in sync as part of execution.)
 
-The plan went through review. The technical writer flagged comments that
-explained what rather than why -- the NLog.config had comments like "configures
-file target" instead of explaining the rotation strategy. The quality reviewer
-caught two issues I would have missed: no explicit LogManager.Shutdown() in the
-service's OnStop() handler, and incorrect file paths missing the src/ prefix.
+- **Invoke:** `Use your doc-sync skill to synchronize documentation across this repository`
 
-These are the bugs that ship to production when you skip review cycles. The
-shutdown issue would have caused log loss on service restart. The path issue
-would have failed silently.
+#### `cc-history` — query conversation history
 
-After fixes, I cleared context and executed:
+Queries and analyzes Claude Code conversation history (`~/.claude/projects`) — past
+sessions, token usage, tool calls, message timelines.
 
-```
-Use your planner skill to execute: @plan-logging.md
-```
+- **Invoke:** `Use your cc-history skill to <question about past sessions>`
 
-The developer, debugger, technical writer, and quality reviewer run the
-implementation. Each milestone passes review before the next starts. If the
-implementation deviated from the plan, I would know.
+---
 
-## Architecture: Native Runtimes + Durable Substrate
+## Subagent Reference
 
-This is the largest change in the fork. Upstream's skills were driven by a Python
-`--step` CLI that re-invoked itself between phases; that re-invocation was what
-let a run survive a fresh session. Claude Code now ships native orchestration
-primitives — the **Workflow tool** (deterministic JS, journal-based
-`resumeFromRunId`, same-session only), **Agent Teams** (lead + teammates + shared
-task list, experimental/env-gated, all state ephemeral), and **Agent-tool
-subagents** (ephemeral, report-back only). All three execute orchestration well
-but lack the one thing the Python loop provided: **cross-session durability and
-resume**. A run that crashes, a session that exits, or a script edited mid-flight
-loses all progress.
+Subagents (`agents/*.md`) are the leaf workers that skills dispatch to. Each carries
+its own model, tool allowlist, and system prompt. **Leaf workers carry
+`disallowedTools: Agent`** so a spawned worker cannot itself spawn — the spawn surface
+is constrained entirely by native primitives, not by prose guards.
 
-The fork's answer is a **thin durable substrate around the native runtimes** —
-not a new orchestrator. Native runtimes drive execution; the substrate only
-*records* it and *replays* it.
+| Subagent | Model | Role | Notable config |
+| --- | --- | --- | --- |
+| `architect` | Opus 4.8 | Understands architecture, conventions, designs quality solutions | `permissionMode: plan`, `effort: high`, read-only tools |
+| `developer` | Sonnet 4.6 | Implements specs with tests — the only writer of code | `isolation: worktree` |
+| `debugger` | Sonnet 4.6 | Analyzes bugs through systematic evidence gathering | `memory: project` |
+| `quality-reviewer` | Sonnet 4.6 | Reviews code/plans for production risk, conformance, structure | `memory: project` |
+| `technical-writer` | Sonnet 4.6 | Documentation optimized for LLM consumption; enforces token budgets | — |
+| `researcher` *(new)* | Sonnet 4.6 | Read-only adversarial critique, divergent reasoning, investigation | read-only tools |
+| `scout` | Haiku 4.5 | Cheap read-only investigator for narrow questions — casts wide, reports signal-dense | read-only tools |
 
-### How it works
+Model assignment follows cost-effective delegation: Haiku (`scout`) for cheap wide
+casts, Sonnet for the bulk of implementation/review, Opus (`architect`) reserved for
+genuine architectural ambiguity.
+
+---
+
+## Slash Commands
+
+| Command | What it does |
+| --- | --- |
+| `/discovery <topic>` | Enter the open-ended exploration frame loop (routes to the `discovery` skill). |
+| `/runs` | List all durable skill runs from the registry as a table (no arguments). |
+| `/run-status <id>` | Show state and projection for one run. |
+| `/resume <id>` | Phase-aware resume with a default-deny consent gate. |
+
+A `SessionStart` hook also surfaces resumable runs automatically and prunes terminal
+runs past the retention TTL.
+
+---
+
+## The Durable Substrate
+
+Claude Code's native runtimes orchestrate well but share one gap: **`resumeFromRunId`
+is same-session only**. A run that crashes, a session that exits, or a script edited
+mid-flight loses all progress. This fork's answer is a **thin durable store around the
+native runtimes** — not a new orchestrator. Runtimes drive execution; the substrate
+only *records* it and *replays* it.
 
 ```
 Native runtimes (Workflow tool / Agent Teams / subagents)
@@ -371,213 +279,143 @@ Hook adapters  ──normalize──▶  events.jsonl  (append-only, O_APPEND at
         /runs · /run-status · /resume <id>  ────read─────┘
 ```
 
-Data flow is **one-directional**: runtimes → hooks → event log → fold →
-projection. The store lives at `~/.claude/skill-runs/<run_id>/`, **outside** the
-runtime-owned dirs (`~/.claude/teams`, `~/.claude/tasks`) that the runtime
-overwrites while live and reaps on session end. The substrate treats those dirs
-as read-only-while-live and copies state *outward* through hook events — it never
-authors or edits them.
+### Run directory layout
 
-Key invariants (ported from the upstream "koan" persistence design):
+```
+~/.claude/skill-runs/<run_id>/
+    run-state.json    — static metadata (run_id, skill, started_at, status)
+    events.jsonl      — append-only event log
+    projection.json   — latest folded projection (pure fold over events)
+    manifest.json     — phase tag table (read_only / write / execute per phase)
+    .lock             — advisory flock file
+```
 
-- **File-boundary:** LLM-facing agents write `.md` only; the substrate is the
-  sole writer of `.json`.
-- **Atomic writes:** every `.json` is written tmp-then-`os.rename`, so concurrent
-  readers never see torn state. Concurrent same-run appends are serialized by an
-  advisory `flock` around the append→fold→projection-rewrite section.
-- **Pure, forward-compatible fold:** the fold ignores unknown event types and
-  fields, so evolving (experimental) runtime hooks don't break replay.
+`run_id` is `<ISO-timestamp>-<8-char-uuid4>` (sortable, collision-safe). The store
+lives **outside** the runtime-owned dirs (`~/.claude/teams`, `~/.claude/tasks`) that
+the runtime overwrites while live and reaps on session end; the substrate treats those
+as read-only-while-live and copies state *outward* through hook events.
+
+### Key invariants
+
+- **File-boundary:** LLM-facing agents write `.md` only; the substrate is the sole
+  writer of `.json`.
+- **Atomic writes:** every `.json` is written tmp-then-`os.rename`; concurrent same-run
+  appends are serialized by an advisory `flock` around append → fold → projection-rewrite.
+- **Pure, forward-compatible fold:** unknown event types/fields are ignored, so
+  evolving (experimental) runtime hooks never break replay.
 - **Retention:** prune only `done`/tombstoned runs past the TTL; keep
   crashed/incomplete runs forever — those are precisely the resumable ones.
 
-### Resume is phase-aware
+### Phase-aware resume
 
-`/resume` does not blindly replay. Each skill declares its phases tagged
-`read_only | write | execute` in a `manifest.json` written at run creation. On
-resume the engine **auto-replays read-only/planning phases** but **requires
-explicit confirmation before any write/execute phase** (default-deny for any
-untagged phase). For Agent Teams it never tries to rehydrate dead teammates —
-teammates are ephemeral — it re-spawns a **fresh team scoped to the remaining
-tasks** reconstructed from the durable task graph.
+`/resume` does **not** blindly replay. Each skill's `phaseTrust` table (or the team
+task graph) tags phases `read_only | write | execute`. On resume the engine:
 
-One sharp edge it handles: native `permissionMode` is the enforcement mechanism
-for read-only phases, but a permissive parent session
-(`bypassPermissions`/`acceptEdits`/`auto`) overrides a child's `plan` mode. When
-the parent mode overrides, the engine drops to full default-deny (every phase
-needs confirmation) and `/resume` warns you.
+- **auto-replays** `read_only`/planning phases, and
+- **requires explicit confirmation** before any `write`/`execute` phase (default-deny
+  for any untagged phase).
 
-The full decision log (DL-001..DL-026), constraints, and the wave-by-wave
-implementation plan live in [`PERSISTENCE-PLAN.md`](PERSISTENCE-PLAN.md) and
-[`plan/`](plan/).
+For Agent Teams it never rehydrates dead teammates — it re-spawns a **fresh team
+scoped to the remaining tasks** reconstructed from the durable task graph.
 
-## Run Management
+> **Sharp edge it handles:** native `permissionMode` enforces read-only phases, but a
+> permissive parent session (`bypassPermissions`/`acceptEdits`/`auto`) overrides a
+> child's `plan` mode. When that happens, the engine drops to full default-deny (every
+> phase needs confirmation) and `/resume` warns you.
 
-The substrate is exposed through three slash commands:
+The full decision log (DL-001..DL-026) lives in
+[`PERSISTENCE-PLAN.md`](PERSISTENCE-PLAN.md), [`plan/`](plan/), and
+[`skills/README.md`](skills/README.md).
 
-| Command | What it does |
+---
+
+## Installation & Configuration
+
+Clone the fork into your Claude Code configuration directory:
+
+```bash
+# Per-project
+git clone https://github.com/jeanbrazeau/claude-config .claude
+
+# Global (new setup)
+git clone https://github.com/jeanbrazeau/claude-config ~/.claude
+
+# Global (existing ~/.claude)
+cd ~/.claude
+git remote add workflow https://github.com/jeanbrazeau/claude-config
+git fetch workflow && git merge workflow/main --allow-unrelated-histories
+```
+
+If you clone elsewhere, install the tracked config dirs into `~/.claude` with the
+included installer (`rsync --delete`):
+
+```bash
+./sync.sh
+```
+
+The substrate is wired through hooks in `settings.json`, which expect the Python
+helpers at `~/.claude/skills/scripts/`. After a global install the hooks fire
+automatically — no extra setup. Run the substrate test suite with:
+
+```bash
+PYTHONPATH=skills/scripts python3 -m pytest tests/ -q
+```
+
+### Configuration knobs (`settings.json`)
+
+| Key | Default | What |
+| --- | --- | --- |
+| `skillRuns.baseDir` | `~/.claude/skill-runs` | Where runs are stored. |
+| `skillRuns.retentionDays` | `7` | TTL for **done** runs only; crashed/incomplete runs are kept indefinitely. |
+| `skillRuns.copyTranscript` | `true` | Copy the native subagent transcript into the run dir on `SubagentStop`. |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` | unset | Opt into Agent Teams for the adversarial skills; unset degrades them to Agent-tool subagents. |
+
+**Wired hooks:** `SessionStart`, `Stop`, `SessionEnd`, `SubagentStart`,
+`SubagentStop`, `TaskCreated`, `TaskCompleted`, `TeammateIdle` — these mirror runtime
+state *out* into the substrate.
+
+---
+
+## Philosophy
+
+LLM-assisted code rots faster than hand-written code: technical debt accumulates
+because the LLM cannot see it and you are moving too fast to notice. This config treats
+that as an engineering problem. Four principles:
+
+- **Context hygiene.** Each task gets precisely the information it needs — no more.
+  A two-file pattern in every directory: minimal `CLAUDE.md` indexes that load
+  automatically, and `README.md`s holding invisible knowledge (architecture, invariants)
+  read only when a trigger says to. The `technical-writer` enforces token budgets
+  (~200 tokens for CLAUDE.md, ~500 for README.md).
+- **Planning before execution.** LLMs make first-shot mistakes, always. Separating
+  planning from execution forces ambiguities to surface when they are cheap to fix.
+  Plans are written to files, so reasoning survives a `/clear`.
+- **Review cycles.** Execution is split into milestones, each validated individually.
+  A `technical-writer` checks clarity; a `quality-reviewer` checks completeness. No
+  milestone starts until the previous passes.
+- **Cost-effective delegation.** The orchestrator delegates to smaller models
+  (Haiku/Sonnet) with just-in-time prompts, escalating to Opus only for genuine ambiguity.
+
+**The canonical loop for non-trivial work:** explore (`codebase-analysis`) → think
+(`deepthink`) → plan (`planner` write) → `/clear` → execute (`planner` execute).
+
+---
+
+## Repository Layout
+
+| Directory | What |
 | --- | --- |
-| `/runs` | List durable skill runs (no arguments). |
-| `/run-status <id>` | Show state and projection for one run. |
-| `/resume <id>` | Phase-aware resume with a default-deny consent gate. |
+| `skills/` | Skill definitions: linear `workflow.mjs` (Workflow tool) + adversarial `SKILL.md` (Agent Teams), plus the Python substrate tree under `scripts/`. |
+| `agents/` | Subagent definitions (developer, quality-reviewer, researcher, …). |
+| `commands/` | Slash commands (`discovery`, `resume`, `runs`, `run-status`). |
+| `conventions/` | Universal doc/code-quality conventions for agents and skills. |
+| `output-styles/` | Output-style definitions. |
+| `plan/` | Multi-wave implementation plan for the orchestration tier. |
+| `docs/` | Platform assumptions + vendored official Claude Code docs (~150 files). |
+| `tests/` | pytest suite for the persistence/orchestration substrate. |
+| `settings.json` | Harness config: skill-runs substrate, hooks, permissions. |
+| `sync.sh` | Installs the config dirs into `~/.claude` via `rsync --delete`. |
+| `PERSISTENCE-PLAN.md` | Design plan + decision log (DL-*) for the durable substrate. |
 
-A `SessionStart` hook also detects incomplete runs and offers to resume them, and
-prunes terminal runs past the retention TTL.
-
-## Skills & Agents
-
-**Skills** (`skills/`): `arxiv-to-md`, `cc-history`, `codebase-analysis`,
-`decision-critic`, `deepthink`, `doc-sync`, `incoherence`, `leon-writing-style`
-*(new in this fork)*, `planner`, `problem-analysis`, `prompt-engineer`,
-`refactor`. Linear skills carry a `workflow.mjs` (Workflow tool); adversarial
-skills carry a `SKILL.md` (Agent Teams).
-
-**Subagents** (`agents/`): `architect`, `debugger`, `developer`,
-`quality-reviewer`, `technical-writer`, and `researcher` *(new in this fork)*.
-Leaf workers carry `disallowedTools: Agent` so a spawned worker cannot itself
-spawn; the spawn surface is constrained entirely by native primitives
-(`Agent(type)` allowlists and `permissions.deny`) rather than the removed Python
-dispatch-prose guards.
-
-## Vendored Docs & Tests
-
-- **`docs/claude-code/`** — a mirrored, organized copy of the official Claude Code
-  docs (~150 files) plus a refresh script, so skill ports can be built and
-  reviewed against a pinned snapshot of the platform.
-- **`tests/`** — a pytest suite for the substrate: persistence core, hook
-  adapters, contract/registry/retention, resume engine, the Agent Teams bridge,
-  Workflow/adversarial **port-parity fixtures** (proving each native port matches
-  the retired Python behavior before deletion), plus property-based and chaos
-  layers. Run with `PYTHONPATH=skills/scripts python3 -m pytest tests/ -q`.
-
-## Other Skills
-
-Not every task needs the full planning workflow. These skills handle specific
-concerns.
-
-### DeepThink
-
-I use this skill multiple times a day -- whenever I do not know what shape the
-answer should take.
-
-Unlike `problem-analysis` or `decision-critic`, deepthink has no fixed
-structure. It handles trade-offs, taxonomy questions, evaluative judgments --
-whatever you throw at it.
-
-So, when do I reach for it?
-
-Meta-cognitive debugging. I keep making the same mistake. The LLM keeps
-misunderstanding the task. Why? Something is broken and I need to see it before
-I can fix it.
-
-Strategy evaluation. Multiple valid approaches exist (and gut feel is not
-enough). PDF conversion: download the TeX source, parse the PDF directly, or
-let the LLM render it visually. S3 artifact versioning: timestamp paths,
-pointer files, checksums. Systematic comparison beats intuition.
-
-Best practices research. What is the canonical approach? How do mature CI/CD
-systems handle artifact versioning? Industry patterns likely exist -- I just do
-not know them yet.
-
-Architecture and design. How should these components interact? Where do the
-delegation boundaries go? I think them through before committing to code.
-
-Consolidation decisions. Should these two skills be merged? Do they serve
-distinct purposes, or am I maintaining unnecessary complexity?
-
-Two modes, auto-detected. Quick mode reasons directly. Full mode launches
-parallel sub-agents with distinct analytical perspectives, then synthesizes
-through agreement patterns.
-
-```
-Use your deepthink skill to think through [question]
-```
-
-For explicit mode selection:
-
-```
-Use your deepthink skill (quick) to [question]
-Use your deepthink skill (full) to [question]
-```
-
-### Refactor
-
-LLM-generated code accumulates technical debt. The LLM does not see duplication
-across files or notice god functions growing.
-
-The refactor skill explores multiple dimensions in parallel -- naming,
-extraction, types, errors, modules, architecture, abstraction -- validates
-findings against evidence, and outputs prioritized recommendations. It does not
-generate code; it tells you what to fix and why.
-
-Use it when:
-
-- After LLM-generated features work but feel messy
-- Before major changes to identify friction points
-- Code review reveals structural issues
-- Simple changes require touching many files
-
-```
-Use your refactor skill on src/services/
-```
-
-With focus area:
-
-```
-Use your refactor skill on src/ -- focus on refactoring the rendering engine so that it can be reused in multiple components.
-```
-
-### Prompt Engineer
-
-This workflow consists entirely of prompts. Each can be optimized individually.
-
-The skill analyzes prompts, proposes changes with explicit pattern attribution,
-and waits for your approval before applying anything.
-
-Use it when:
-
-- A sub-agent definition is not performing as expected
-- Optimizing a skill's Python script prompts
-- Reviewing a multi-prompt workflow for consistency
-
-```
-Use your prompt engineer skill to optimize the system prompt for agents/developer.md
-```
-
-The skill was optimized using itself.
-
-### Doc Sync
-
-The CLAUDE.md/README.md hierarchy requires maintenance. The structure changes
-over time. Documentation drifts.
-
-The doc-sync skill audits and synchronizes documentation across a repository.
-
-Use it when:
-
-- Bootstrapping the workflow on an existing repository
-- After major refactors or directory restructuring
-- Periodic audits to check for documentation drift
-
-If you use the planning workflow consistently, the technical writer agent
-handles documentation as part of execution. Doc-sync is primarily for
-bootstrapping or recovery.
-
-```
-Use your doc-sync skill to synchronize documentation across this repository
-```
-
-For targeted updates:
-
-```
-Use your doc-sync skill to update documentation in src/validators/
-```
-
-### Leon Writing Style
-
-New in this fork. A staged writing workflow that generates style-matched content
-rather than analysis — it runs its phases on the Workflow tool like the other
-linear skills.
-
-```
-Use your leon-writing-style skill to draft [content]
-```
+For per-skill internals see each skill's `README.md`; for the substrate design see
+[`skills/README.md`](skills/README.md) and [`PERSISTENCE-PLAN.md`](PERSISTENCE-PLAN.md).
