@@ -1,7 +1,7 @@
 ---
 name: developer
 description: Implements your specs with tests - delegate for writing code
-model: claude-sonnet-4-6
+model: sonnet
 color: blue
 isolation: worktree
 disallowedTools: Agent

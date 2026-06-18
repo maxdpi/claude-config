@@ -1,7 +1,7 @@
 ---
 name: quality-reviewer
 description: Reviews code and plans for production risks, project conformance, and structural quality
-model: claude-sonnet-4-6
+model: sonnet
 color: orange
 memory: project
 disallowedTools: Agent

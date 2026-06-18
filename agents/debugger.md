@@ -1,7 +1,7 @@
 ---
 name: debugger
 description: Analyzes bugs through systematic evidence gathering - use for complex debugging
-model: claude-sonnet-4-6
+model: sonnet
 color: cyan
 disallowedTools: Agent
 memory: project

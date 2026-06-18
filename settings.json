@@ -20,7 +20,11 @@
   "cleanupPeriodDays": 30,
   "env": {
     "//CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "Enables Agent Teams mode (experimental). When unset/empty, skills degrade gracefully to Workflow tool + Agent-tool subagents with IDENTICAL resume semantics (DL-009). Now committed as '1' to activate teammate coordination (messaging, shared task list, inter-agent debate) for the adversarial skills (decision-critic, deepthink, problem-analysis). This supersedes DL-T1-04, which only warned against committing an EMPTY value (treated as absent by select_orchestration_mode(), so it misrepresented the runtime); a concrete '1' accurately represents enabled mode. To revert to the subagent fallback, set to '0' or remove the key below.",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "//ANTHROPIC_DEFAULT_MODELS": "Central model provisioning for the custom agents (agents/*.md). Each agent's frontmatter declares a tier alias (opus/sonnet/haiku) rather than a pinned full model ID; these vars pin what each alias resolves to (model-config.md:146). Behavior-preserving: the values below reproduce the IDs the agents pinned before the alias migration (architect=opus-4-8, the sonnet workers=sonnet-4-6, scout=haiku-4-5-20251001). To swap a whole tier in the future, change the one line here — every agent on that alias follows. Tier-granular: agents sharing an alias move together. To pin an individual agent off-tier, put a full model ID back in its frontmatter instead.",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-8",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001"
   },
   "hooks": {
     "SessionStart": [
