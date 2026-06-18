@@ -84,8 +84,15 @@ def _make_wf_runstate(
     status: str,
     phases: list[dict],
     agents: list[dict],
+    result: object = "__omit__",
 ) -> Path:
-    """Write a synthetic Workflow run-state JSON and return its path."""
+    """Write a synthetic Workflow run-state JSON and return its path.
+
+    *result* mirrors the native runtime's top-level ``result`` field (the .mjs
+    return value). Pass ``result=None`` for a killed/mid-run state, or a dict
+    such as ``{"plan": {...}}`` for a completed planner run. The sentinel
+    default omits the key entirely so existing tests are unaffected.
+    """
     # Simulate: .../projects/proj123/sess456/workflows/{wf_run_id}.json
     wf_dir = tmp_path / "projects" / "proj123" / "sess456" / "workflows"
     wf_dir.mkdir(parents=True)
@@ -103,6 +110,8 @@ def _make_wf_runstate(
         "status": status,
         "workflowProgress": progress,
     }
+    if result != "__omit__":
+        state["result"] = result
     wf_path.write_text(json.dumps(state), encoding="utf-8")
     return wf_path
 
@@ -438,3 +447,91 @@ def test_bridge_missing_mjs_yields_empty_manifest(tmp_path: Path, monkeypatch) -
             f"Untagged phase {phase_id!r} should be needs_confirmation (default-deny); "
             f"got {info['classification']}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 8: plan.html emission for planner runs (M-202, DL-202/207/208)
+# ---------------------------------------------------------------------------
+
+# A run-state result.plan shaped like a completed planner return value.
+_PLANNER_PLAN = {
+    "overview": {"title": "Demo", "problem": "P", "approach": "A"},
+    "planning_context": {"decisions": [], "rejected_alternatives": [], "constraints": [], "risks": []},
+    "invisible_knowledge": {"system": "IK", "invariants": [], "tradeoffs": []},
+    "milestones": [
+        {"id": "M-001", "name": "First", "files": [], "acceptance_criteria": [], "code_intents": []}
+    ],
+    "waves": [],
+    "diagrams": [{"id": "CON", "title": "Architecture", "mermaid": "flowchart TD\n  A-->B"}],
+}
+
+
+def _bridge_planner(tmp_path, monkeypatch, *, workflow_name="planner", status="completed", result):
+    """Bridge a planner-shaped run-state and return (run_id, base)."""
+    wf_path = _make_wf_runstate(
+        tmp_path,
+        wf_run_id="run-html",
+        workflow_name=workflow_name,
+        status=status,
+        phases=[{"index": 0, "title": "plan-design-work"}],
+        agents=[{"index": 0, "label": "architect", "phaseIndex": 0, "agentId": "ag-1", "state": "done"}],
+        result=result,
+    )
+    base = tmp_path / "skill-runs"
+    import skills.lib.workflow.persistence.workflow_bridge as wb
+    monkeypatch.setattr(wb, "_find_mjs", lambda name: None)
+    run_id = bridge_workflow_run(wf_path, skill_runs_base=base)
+    return run_id, base
+
+
+def _plan_html_path(base: Path, run_id: str) -> Path:
+    from skills.lib.workflow.constants import PLAN_HTML_FILE
+    return base / run_id / PLAN_HTML_FILE
+
+
+def test_bridge_emits_plan_html_for_planner_run(tmp_path, monkeypatch) -> None:
+    """A completed planner run with a usable result.plan writes plan.html."""
+    run_id, base = _bridge_planner(tmp_path, monkeypatch, result={"plan": _PLANNER_PLAN})
+    html_path = _plan_html_path(base, run_id)
+    assert html_path.exists(), f"plan.html missing at {html_path}"
+    content = html_path.read_text(encoding="utf-8")
+    assert "<!DOCTYPE html>" in content
+    assert "mermaid@11" in content
+    assert "marked@16" in content
+
+
+def test_bridge_no_plan_html_when_result_null(tmp_path, monkeypatch) -> None:
+    """A killed/mid-run state (result is null) writes no plan.html; phases still bridge."""
+    run_id, base = _bridge_planner(tmp_path, monkeypatch, status="running", result=None)
+    assert not _plan_html_path(base, run_id).exists()
+    # Phase events are still bridged regardless of the HTML guard.
+    handle = find_run(run_id, base_dir=base)
+    events = read_events(handle.as_run_dir())
+    assert any(e.get("type") == "phase_started" for e in events)
+
+
+def test_bridge_no_plan_html_when_plan_empty(tmp_path, monkeypatch) -> None:
+    """result.plan lacking overview and milestones is treated as not-usable."""
+    run_id, base = _bridge_planner(tmp_path, monkeypatch, result={"plan": {}})
+    assert not _plan_html_path(base, run_id).exists()
+
+
+def test_bridge_no_plan_html_for_non_planner_workflow(tmp_path, monkeypatch) -> None:
+    """Only planner runs emit plan.html, even if another workflow returns a plan."""
+    run_id, base = _bridge_planner(
+        tmp_path, monkeypatch, workflow_name="refactor", result={"plan": _PLANNER_PLAN}
+    )
+    assert not _plan_html_path(base, run_id).exists()
+
+
+def test_bridge_plan_html_idempotent_rebridge(tmp_path, monkeypatch) -> None:
+    """Re-bridging regenerates plan.html with no leftover temp files."""
+    run_id, base = _bridge_planner(tmp_path, monkeypatch, result={"plan": _PLANNER_PLAN})
+    # Re-bridge the same run-state.
+    wf_path = tmp_path / "projects" / "proj123" / "sess456" / "workflows" / "run-html.json"
+    import skills.lib.workflow.persistence.workflow_bridge as wb
+    monkeypatch.setattr(wb, "_find_mjs", lambda name: None)
+    bridge_workflow_run(wf_path, skill_runs_base=base)
+    run_dir = base / run_id
+    assert (run_dir / "plan.html").exists()
+    assert list(run_dir.glob(".tmp-plan-html-*")) == []

@@ -107,26 +107,21 @@ files? If no, it belongs here.
 6. **Tradeoffs**: Costs and benefits of chosen approaches
 
 ### Architecture
-```
 
-[ASCII diagram showing component relationships]
-
-Example: User Request | v +----------+ +-------+ | Auth |---->| Cache |
-+----------+ +-------+ | v +----------+ +------+ | Handler |---->| DB |
-+----------+ +------+
-
-```
+Author a **CON** (container/component) diagram per `conventions/visualization.md`
+— a `flowchart` showing the runtime building blocks and how they connect. Apply
+that convention's suppression threshold (write prose instead when fewer than 3
+meaningful components are in scope). Diagrams are emitted into the plan's
+top-level `diagrams[]` array as `{ id, title, mermaid }` entries and rendered as
+Mermaid in the HTML plan view (`plan.html`).
 
 ### Data Flow
 
-```
-
-[How data moves through the system - inputs, transformations, outputs]
-
-Example: HTTP Request --> Validate --> Transform --> Store --> Response | v Log
-(async)
-
-````
+Author a **SEQ** (sequence) diagram per `conventions/visualization.md` — a
+`sequenceDiagram` showing how data moves through the system over time (inputs,
+transformations, outputs). Suppress to prose when fewer than 3 participants or
+fewer than 4 messages with no branching. Like the Architecture slot, the diagram
+lives in the top-level `diagrams[]` array as a `{ id, title, mermaid }` entry.
 
 ### Why This Structure
 

@@ -22,15 +22,20 @@ plan.json
     known_risks: [KnownRisk]
 
   invisible_knowledge:
-    architecture: Diagram
-    data_flow: Diagram
     structure_rationale: string
     invariants: [string]
     tradeoffs: [string]
 
   milestones: [Milestone]
   milestone_dependencies: MilestoneDependencies
+  diagrams: [Diagram]   # { id: CON|CMP|SEQ|STT, title, mermaid } — see conventions/visualization.md
 ```
+
+`Diagram` is `{ id, title, mermaid }`: Mermaid source authored per
+`conventions/visualization.md` (CON/CMP/SEQ/STT slots, grounding and suppression
+rules). Diagrams live in the top-level `diagrams[]` array and are rendered as
+Mermaid in the HTML plan view (`plan.html`); the architecture/data-flow visuals
+are NOT stored inline as ASCII.
 
 ---
 
@@ -97,16 +102,13 @@ Link to decision that led to rejection.
 
 Knowledge that should transfer to future LLM sessions.
 
+Architecture and data-flow visuals are NOT stored here as ASCII; they are
+authored as Mermaid in the top-level `diagrams[]` array (`{ id, title, mermaid }`,
+per `conventions/visualization.md`) and rendered in `plan.html`. This section
+captures the prose knowledge that should transfer to future sessions.
+
 ```json
 {
-  "architecture": {
-    "diagram_ascii": "Client --> Gateway --> Services",
-    "description": "Request routing pattern..."
-  },
-  "data_flow": {
-    "diagram_ascii": "Input -> Validate -> Transform -> Store",
-    "description": "Data pipeline..."
-  },
   "structure_rationale": "Why we organized code this way...",
   "invariants": [
     "All public APIs must validate input before processing",
@@ -246,9 +248,12 @@ TW populates after code changes.
 
 ## Milestone Dependencies
 
+`waves[]` is the machine-readable dependency contract. The dependency graph is
+rendered visually as a Mermaid `flowchart` in the top-level `diagrams[]` array
+(`{ id, title, mermaid }`), not stored inline as ASCII.
+
 ```json
 {
-  "diagram_ascii": "M-001 --> M-002\n        \\--> M-003\nM-002 --> M-004\nM-003 --> M-004",
   "waves": [
     { "wave": 1, "milestones": ["M-001"] },
     { "wave": 2, "milestones": ["M-002", "M-003"] },

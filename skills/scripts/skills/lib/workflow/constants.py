@@ -64,6 +64,8 @@ Write detailed content to FILES, return only status + metadata.
 # =============================================================================
 
 PLAN_FILE = "plan.json"
+# Additive rendered view written by the bridge beside plan.json (DL-207).
+PLAN_HTML_FILE = "plan.html"
 
 
 # =============================================================================
