@@ -75,6 +75,7 @@ actually accomplished, not what was planned**, with exactly four subsections:
 Preserve all prior milestones' Outcome sections intact when updating. After the
 UPDATE, advance the next pending milestone and adjust remaining sketches if the
 deviations require it.
+See `conventions/artifacts.md` for the additive-forward lifetime class definition (rewritten but Outcome sections append-only).
 
 ## Cross-Milestone Learning
 

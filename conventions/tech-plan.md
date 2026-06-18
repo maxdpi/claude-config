@@ -15,6 +15,7 @@ containers, modules, data shapes, and the relationships between them.
 The artifact is **disposable**: its reviewer may rewrite it in place, and
 milestone Outcomes eventually supersede it as the ground truth of what was
 actually built. Do not treat it as frozen.
+See `conventions/artifacts.md` for the disposable lifetime class definition and the full per-artifact lifecycle table.
 
 ### Prerequisites
 

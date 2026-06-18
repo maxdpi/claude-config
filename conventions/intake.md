@@ -74,6 +74,7 @@ The brief is **frozen** at intake exit: it is the authoritative initiative conte
 and is not rewritten downstream. If execution reveals an assumption is wrong, that
 is recorded in the relevant milestone Outcome or as a note — not by silently
 editing the brief.
+See `conventions/artifacts.md` for the frozen lifetime class definition and the brief's place in the per-artifact lifecycle table.
 
 ## What Intake Does NOT Do
 

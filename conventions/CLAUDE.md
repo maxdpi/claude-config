@@ -18,6 +18,8 @@ Universal conventions for agents and skills.
 | `milestones.md`     | Milestone soundness criteria + Outcome schema | Planner milestones mode, cross-milestone learning  |
 | `core-flows.md`     | Frozen SEQ-only behavioral spec, produced before structural design | Planner initiative mode, behavioral-spec phase |
 | `tech-plan.md`      | Structural architecture artifact (CON/CMP/Data-Model) + dedicated adversarial review | Planner initiative mode, tech-plan spec/review phases |
+| `artifacts.md`          | Artifact lifetime taxonomy (frozen/additive-forward/disposable) + per-artifact class table | Understanding artifact lifecycle, planner phase authoring, QR grounding |
+| `guided-transitions.md` | Auto-advance vs hand-back transition discipline; review/interactive phases always park | Understanding phase-transition rationale, planner/discovery/curation flow design |
 
 ## Subdirectories
 

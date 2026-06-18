@@ -1,6 +1,13 @@
 # Role-Convention Registry
 # CI validates actual get_convention() calls match these declarations
 #
+# Cross-cutting design-reference docs (artifacts.md, guided-transitions.md) are
+# NOT listed under any role's `receives` because no role loads them via
+# get_convention(). They are indexed in conventions/CLAUDE.md (the discoverability
+# surface for agents that read conventions as background knowledge rather than
+# loading them through the registry). Adding phantom receives entries here would
+# fail CI.
+#
 # Structure per role:
 #   receives: list of conventions this role loads
 #   phase_specific: per-phase convention overrides

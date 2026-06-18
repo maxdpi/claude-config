@@ -4,15 +4,19 @@
  * Replaces the M-006 scaffold ({status:"scaffold"}) with the complete
  * planner phase sequence ported from orchestrator/planner.py.
  *
- * Phase sequence (mirrors the 14-step Python orchestrator):
- *   plan-init          — context capture (read_only)
- *   context-verify     — context persistence + self-check (read_only)
- *   plan-design-work   — architect role: design milestones/code-intents (execute)
- *   plan-design-qr     — quality-reviewer: verify design (execute)
- *   plan-code-work     — developer role: fill code_changes (execute)
- *   plan-code-qr       — quality-reviewer: verify code (execute)
- *   plan-docs-work     — technical-writer role: add doc_diffs (execute)
- *   plan-docs-qr       — quality-reviewer: verify docs (execute)
+ * Mode-dispatched orchestrator (plan / initiative / milestones modes):
+ *
+ *   plan mode — intake-gather → intake-deepen → intake-summarize →
+ *     plan-design-work → plan-design-qr →
+ *     plan-code-work  → plan-code-qr  →
+ *     plan-docs-work  → plan-docs-qr
+ *
+ *   initiative mode — core-flows → tech-plan-spec → tech-plan-review
+ *     (runs once upstream of the milestone loop)
+ *
+ *   milestones mode — milestone-validate → milestone-plan → execute →
+ *     exec-review → milestone-outcome → milestone-propagate
+ *     (loops per milestone)
  *
  * Durable substrate wiring (M-006.5 / DL-013 / DL-014):
  *   Each phase boundary emits phase_started / phase_completed events via the

@@ -15,6 +15,7 @@ downstream design and execution phase reads it as authoritative behavioral truth
 The artifact is **FROZEN at exit**. No downstream phase may rewrite it. A
 downstream phase that discovers a behavioral error records that error in its own
 Outcome or Decisions section; it does not edit core-flows.md.
+See `conventions/artifacts.md` for the frozen lifetime class definition and the full per-artifact lifecycle table.
 
 ## What Goes in Each Flow
 

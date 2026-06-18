@@ -61,6 +61,8 @@ to proceed (execute, continue, or accept), that is the approval. A review phase'
 job ends at producing a corrected artifact plus any outstanding loop-back
 recommendations — not at declaring the work "done."
 
+Review phases hand back (park) rather than auto-advance after surfacing their corrected artifact; see `conventions/guided-transitions.md` for the override discipline and the rationale.
+
 ## Verdict Format Obligation
 
 A review phase that follows this convention MUST classify each finding. The
