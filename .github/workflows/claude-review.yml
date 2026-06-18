@@ -27,17 +27,19 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # Show a live progress checklist on the PR while reviewing.
-          track_progress: true
-
+          # NOTE: do NOT set track_progress here — it overrides claude_args and
+          # strips the diff/inline-comment tools, leaving only a placeholder
+          # comment. The claude_args allowedTools below are what let Claude
+          # actually read the diff and post review comments.
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
-            Review this pull request. This repo is a Claude Code configuration
-            project (skills, subagents, commands, conventions, and the Python
-            persistence/orchestration substrate). Read `conventions/` for the
-            project's own doc and code-quality standards and apply them.
+            Review this pull request. The PR branch is already checked out in
+            the current working directory. This repo is a Claude Code
+            configuration project (skills, subagents, commands, conventions, and
+            the Python persistence/orchestration substrate). Read `conventions/`
+            for the project's own doc and code-quality standards and apply them.
 
             Focus on:
             1. **Correctness** — bugs, broken edge cases, wrong assumptions in
