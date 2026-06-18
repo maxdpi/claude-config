@@ -18,6 +18,8 @@
 !docs/**
 !tests/
 !tests/**
+!plan/
+!plan/**
 
 # Track root files
 !README.md
