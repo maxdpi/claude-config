@@ -44,9 +44,8 @@ Plan
     known_risks[]: id (R-XXX), risk, mitigation, anchor?, decision_ref?
 
   invisible_knowledge:
-    architecture: {diagram_ascii, description}
-    data_flow: {diagram_ascii, description}
     structure_rationale, invariants[], tradeoffs[]
+    (architecture/data-flow visuals live in top-level diagrams[], not inline ASCII)
 
   milestones[]:
     id (M-XXX), number, name, files[], flags[], requirements[], acceptance_criteria[]
@@ -57,8 +56,10 @@ Plan
     is_documentation_only, delegated_to?
 
   milestone_dependencies:
-    diagram_ascii
     waves[]: wave number, milestones[]
+    (dependency graph rendered as a Mermaid flowchart in top-level diagrams[])
+
+  diagrams[]: id (CON|CMP|SEQ|STT), title, mermaid   # per conventions/visualization.md
 ```
 
 Reference integrity: code_change.intent_ref -> code_intent.id, decision_refs -> decision_log.id

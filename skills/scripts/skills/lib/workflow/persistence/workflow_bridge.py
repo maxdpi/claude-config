@@ -48,6 +48,7 @@ from .events import (
     event_schema,
 )
 from .manifest import write_phase_manifest
+from .plan_html import write_plan_html
 from .registry import find_run
 from .rundir import RunDir, _resolve_base_dir, create_run_dir, init_run_dir_files
 
@@ -245,6 +246,10 @@ def bridge_workflow_run(
     the substrate run directory (idempotent), writes the phase manifest from the
     .mjs ``meta.phaseTrust``, and appends durable events for each phase and
     subagent in ``workflowProgress``.
+
+    For planner runs with a usable ``result.plan``, also writes ``plan.html``
+    beside ``plan.json`` in the run dir (DL-207) — an additive Mermaid-rendered
+    view. Emission is best-effort and non-fatal.
 
     Args:
         wf_runstate_path: Path to ``~/.claude/projects/{p}/{s}/workflows/{id}.json``.
@@ -464,6 +469,24 @@ def bridge_workflow_run(
             )
             _safe_append(run_dir, completed_ev)
             already_bridged_phase_idx.add(completed_idx_key)
+
+    # ── Emit plan.html for completed planner runs (DL-202, DL-207, DL-208) ────
+    # Only planner runs return a result.plan carrying diagrams[]; other
+    # workflows return null or a differently shaped result. plan.html is an
+    # additive rendered VIEW beside plan.json — best-effort and non-fatal, so a
+    # failure here never disturbs phase-event bridging above.
+    if workflow_name == "planner":
+        result = wf_state.get("result")
+        if isinstance(result, dict):
+            plan = result.get("plan")
+            # Usable-plan guard mirrors the .mjs hasPlan check (workflow.mjs:1532):
+            # require an overview or a non-empty milestones list, so a partial or
+            # killed run-state with result.plan={} skips HTML emission.
+            if isinstance(plan, dict) and (plan.get("overview") or plan.get("milestones")):
+                try:
+                    write_plan_html(run_dir.path, plan)
+                except Exception as exc:  # belt-and-suspenders; writer is non-fatal too
+                    log.warning("workflow_bridge: plan.html write failed: %s", exc)
 
     return run_id
 
