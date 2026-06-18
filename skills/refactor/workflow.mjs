@@ -15,8 +15,8 @@
  * Durable events: emitted at each phase boundary so cross-session resume
  * can replay from the last completed phase (refactor MUST be resumable, DL-008).
  *
- * permissionMode:plan and maxTurns live on agents/explorer.md (DL-023).
- * isolation:worktree lives on the synthesize worker path only (DL-018).
+ * Explore fan-out uses agentType:"scout" (read-only, no worktree isolation on any
+ * path). No explorer.md agent is referenced (DL-023, DL-018).
  */
 
 export const meta = {
@@ -82,18 +82,24 @@ Output as JSON:
   "scope": "<path or null for codebase-wide>",
   "problem_statement": "<only for custom mode, else null>"
 }`,
-    { label: "mode-selection", phase: "mode_selection" },
+    {
+      label: "mode-selection",
+      phase: "mode_selection",
+      schema: {
+        type: "object",
+        properties: {
+          mode:              { type: "string", enum: ["design", "code", "both", "custom"] },
+          scope:             { type: ["string", "null"] },
+          problem_statement: { type: ["string", "null"] },
+        },
+        required: ["mode"],
+      },
+    },
   );
 
-  let mode = "code";
-  let scope = null;
-  try {
-    const parsed = JSON.parse(modeResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    mode = parsed.mode ?? "code";
-    scope = parsed.scope ?? null;
-  } catch (error) {
-    log(`Mode selection parse failed (${error.message}); defaulting to code mode`);
-  }
+  // "code" is the documented default when the agent returns an empty/absent mode.
+  let mode  = modeResult?.mode  ?? "code";
+  let scope = modeResult?.scope ?? null;
 
   log(`Mode: ${mode}, Scope: ${scope ?? "codebase-wide"}, N: ${n}`);
 
@@ -123,15 +129,35 @@ Output as JSON:
     ...
   ]
 }`,
-    { label: "category-selection", phase: "dispatch" },
+    {
+      label: "category-selection",
+      phase: "dispatch",
+      schema: {
+        type: "object",
+        properties: {
+          categories: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id:          { type: "string" },
+                name:        { type: "string" },
+                description: { type: "string" },
+              },
+              required: ["id", "name"],
+            },
+          },
+        },
+        required: ["categories"],
+      },
+    },
   );
 
-  let categories = [];
-  try {
-    const parsed = JSON.parse(dispatchResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    categories = parsed.categories ?? [];
-  } catch (error) {
-    log(`Category parsing failed (${error.message}); using placeholder categories`);
+  // Placeholder categories encode the minimum viable fan-out when the agent
+  // returns an empty array; they are domain defaults, not dead code.
+  let categories = dispatchResult?.categories ?? [];
+  if (categories.length === 0) {
+    log("Category selection returned empty; using placeholder categories");
     categories = Array.from({ length: Math.min(n, 5) }, (_, i) => ({
       id: `cat-${i + 1}`,
       name: `Category ${i + 1}`,
@@ -176,7 +202,6 @@ Output structured findings:
           label: `explore-${cat.id}`,
           phase: "dispatch",
           agentType: "scout",
-          model: "haiku",
         },
       )
     ),

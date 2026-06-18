@@ -14,3 +14,5 @@ Environment-capability probes that validate runtime assumptions before the subst
 | `teammate_memory_probe_result.json`     | Captured output of the DL-023 probe run — never edit directly                    | Reviewing DL-023 probe results without re-running               |
 | `teams_dir_probe.py`                    | A3 probe: validates `~/.claude/teams` and `~/.claude/tasks` ephemerality at session end | Debugging team-dir cleanup, reviewing A3 assumption              |
 | `workflow_journal_probe.mjs`            | A1 probe: validates Workflow-tool journal entry format and on-disk location       | Debugging journal-to-substrate sync, reviewing A1 assumption     |
+| `pipeline_probe.py`                     | DL-T1-05 probe: verifies pipeline() availability on the Workflow tool and whether /tmp artifacts survive worktree isolation into a downstream stage — gates M-006 arxiv restructuring | Auditing pipeline() availability constraints; reviewing DL-T1-05 gate decision |
+| `pipeline_probe_result.json`            | Captured output of the DL-T1-05 probe run — never edit directly                  | Reviewing M-001 probe result without re-running                  |

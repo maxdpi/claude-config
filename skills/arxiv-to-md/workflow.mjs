@@ -110,20 +110,34 @@ For MODE 2:
   ],
   "skipped": ["2501.00001", ...]
 }`,
-    { label: "discover", phase: "discover" },
+    {
+      label: "discover",
+      phase: "discover",
+      schema: {
+        type: "object",
+        properties: {
+          mode:    { type: "integer" },
+          papers:  {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                arxiv_id:  { type: "string" },
+                dest_file: { type: ["string", "null"] },
+              },
+              required: ["arxiv_id"],
+            },
+          },
+          skipped: { type: "array", items: { type: "string" } },
+        },
+        required: ["mode", "papers"],
+      },
+    },
   );
 
-  let mode = 1;
-  let papers = [];
-  let skipped = [];
-  try {
-    const parsed = JSON.parse(discoverResult.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
-    mode = parsed.mode ?? 1;
-    papers = parsed.papers ?? [];
-    skipped = parsed.skipped ?? [];
-  } catch (error) {
-    log(`Discover parse failed (${error.message}) — no papers to convert`);
-  }
+  let mode    = discoverResult?.mode    ?? 1;
+  let papers  = discoverResult?.papers  ?? [];
+  let skipped = discoverResult?.skipped ?? [];
 
   log(`Mode ${mode}: ${papers.length} paper(s) to convert, ${skipped.length} skipped`);
 
