@@ -85,11 +85,17 @@ const QR_PASS_FAIL_GATE = `After ALL verifier agents return:
 // Phase 1: plan-init
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PLAN_INIT_PROMPT = `PLANNER — plan-init
+// Subagents cannot see the orchestrator conversation (skills/README.md runtime
+// contract), so the user request must be injected explicitly. PLAN_INIT_PROMPT
+// is a function that embeds requestText so the architect knows what to capture.
+const PLAN_INIT_PROMPT = (requestText) => `PLANNER — plan-init
 
 ${THINKING_EFFICIENCY}
 
-CONTEXT CAPTURE: Structure these categories from the conversation:
+USER REQUEST:
+${requestText || "(no request text supplied — explore the repository to recover context)"}
+
+CONTEXT CAPTURE: Structure these categories from the USER REQUEST above (and repo exploration as needed):
 
 1. TASK_SPEC: what the plan is ABOUT (not orchestration instructions)
    - SUBJECT: the user's underlying goal
@@ -151,9 +157,15 @@ Output the populated context JSON object.`;
 // Phase 3: plan-design-work
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PLAN_DESIGN_WORK_PROMPT = (context) => `PLANNER — plan-design-work
+// requestText carries the original user goal so the architect can cross-check
+// the captured context against it. Context phases may thin-capture; having the
+// raw request here prevents the design from drifting away from user intent.
+const PLAN_DESIGN_WORK_PROMPT = (context, requestText) => `PLANNER — plan-design-work
 
 You are dispatching to the ARCHITECT role to design the implementation plan.
+
+USER REQUEST (original goal):
+${requestText || "(no request text supplied — design from the planning context below)"}
 
 PLANNING CONTEXT:
 ${context}
@@ -376,14 +388,42 @@ function isQrPass(qrResult) {
 // Main workflow
 // ─────────────────────────────────────────────────────────────────────────────
 
+  // Derive the user request from whatever shape the runner passes args in.
+  // Confirmed runner contract: args.request is the primary field
+  // (prompt-engineer/workflow.mjs lines 104-110 shows the same coalescing).
+  // Three arg shapes are accepted so a free-text invocation is never silently
+  // dropped: args as a bare string, args.request, and args.text.
+  const requestText = [
+    typeof args === "string" ? args : null,
+    args && typeof args.request === "string" ? args.request : null,
+    args && typeof args.text === "string" ? args.text : null,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .concat(
+      // Append reference-file paths when present (either field name the runner
+      // may use) so the architect can locate relevant project docs.
+      (() => {
+        const files = (args && (args.referenceFiles || args.files));
+        return Array.isArray(files) && files.length > 0
+          ? "\n\nREFERENCE FILES:\n" + files.join("\n")
+          : "";
+      })()
+    );
+
   // ── Phase 1: plan-init ─────────────────────────────────────────────────────
   phase("plan-init");
   log("PLANNER: Starting plan-init (context capture)");
   log("DURABLE_EVENT: phase_started plan-init");
 
-  const initResult = await agent(PLAN_INIT_PROMPT, {
+  // agentType: 'architect' gives the plan-init phase Read/Grep tool access so
+  // it can explore the repo when requestText is thin (DL-102).
+  // phaseTrust: 'read_only' (declared in meta.phaseTrust) is orthogonal —
+  // agentType selects tools; phaseTrust governs resume auto-replay (DL-102, DL-014).
+  const initResult = await agent(PLAN_INIT_PROMPT(requestText), {
     label: "plan-init",
     phase: "plan-init",
+    agentType: "architect",
   });
 
   log("DURABLE_EVENT: phase_completed plan-init");
@@ -393,9 +433,13 @@ function isQrPass(qrResult) {
   log("PLANNER: Starting context-verify");
   log("DURABLE_EVENT: phase_started context-verify");
 
+  // agentType: 'architect' allows self-verification step to gather missing
+  // context via Read/Grep as the prompt instructs (DL-102).
+  // phaseTrust: 'read_only' remains unchanged — orthogonal to agentType (DL-014).
   const contextResult = await agent(CONTEXT_VERIFY_PROMPT(initResult), {
     label: "context-verify",
     phase: "context-verify",
+    agentType: "architect",
   });
 
   log("DURABLE_EVENT: phase_completed context-verify");
@@ -406,7 +450,7 @@ function isQrPass(qrResult) {
   log("DURABLE_EVENT: phase_started plan-design-work");
   log("DURABLE_EVENT: subagent_spawned architect plan-design-work");
 
-  const designResult = await agent(PLAN_DESIGN_WORK_PROMPT(contextResult), {
+  const designResult = await agent(PLAN_DESIGN_WORK_PROMPT(contextResult, requestText), {
     label: "plan-design-work",
     phase: "plan-design-work",
     agentType: "architect",
@@ -611,17 +655,26 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
   // ── Build the real `plan` artifact ────────────────────────────────────────
   // Extract the final plan JSON from the docs phase output (which contains
   // the most complete version: design + code_changes + doc_diffs).
-  // Falls back to extracting from earlier phases if parsing fails.
-  let planObj = extractJson(approvedDocs);
+  // Falls back to code then design when a later phase's output degrades to a
+  // _raw blob (e.g. docs-QR emits STATUS: BLOCKED).
+  //
+  // hasPlan treats a _raw-only extract as "not a usable plan" so the fallback
+  // chain keeps walking even when extractJson wraps an unparseable response.
+  // The original !planObj._raw guard stopped the chain the moment any phase
+  // returned a _raw blob, trapping the planner on an empty result (DL-103).
+  const hasPlan = (o) =>
+    o && !o._raw && (o.overview || (Array.isArray(o.milestones) && o.milestones.length > 0));
 
-  // Ensure the artifact has the canonical required shape
-  if (!planObj.overview && !planObj._raw) {
-    // Try code phase if docs phase JSON extraction failed
-    planObj = extractJson(codeResult);
+  let planObj = extractJson(approvedDocs);
+  if (!hasPlan(planObj)) {
+    // Docs phase produced no usable plan — try the code phase (DL-026 fix
+    // propagation: approvedCode carries the fix-pass output when QR triggered one).
+    planObj = extractJson(approvedCode);
   }
-  if (!planObj.overview && !planObj._raw) {
-    // Fall back to design phase
-    planObj = extractJson(designResult);
+  if (!hasPlan(planObj)) {
+    // Code phase also unusable — fall back to the design phase. This is always
+    // the phase that produces real milestones from the architect's work.
+    planObj = extractJson(approvedDesign);
   }
 
   // Guarantee the top-level shape the parity test asserts on
