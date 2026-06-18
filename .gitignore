@@ -26,7 +26,7 @@
 !LICENSE
 !.gitignore
 !settings.json
-
+!sync.sh
 # Always ignore these, even in tracked directories
 .DS_Store
 **/.DS_Store
