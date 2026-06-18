@@ -1,9 +1,12 @@
 name: Claude Code Review
 
-# Automatically review every pull request with Claude.
-# Mirrors the AI-reviewer setup on manaflow-ai/cmux. Requires the
-# CLAUDE_CODE_OAUTH_TOKEN secret (generate with `claude setup-token`,
-# then add under Settings -> Secrets and variables -> Actions).
+# Automatically review every pull request with Claude, using Anthropic's
+# official `code-review` skill (the same /code-review logic, run in CI).
+#
+# Auth: keeps the Max subscription token (CLAUDE_CODE_OAUTH_TOKEN). NOTE — the
+# official GitHub Actions docs only document `anthropic_api_key`; subscription
+# OAuth tokens may be rejected for unattended automation. --debug is enabled
+# temporarily to capture the exact auth error; remove it once auth is settled.
 
 on:
   pull_request:
@@ -27,32 +30,13 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # NOTE: do NOT set track_progress here — it overrides claude_args and
-          # strips the diff/inline-comment tools, leaving only a placeholder
-          # comment. The claude_args allowedTools below are what let Claude
-          # actually read the diff and post review comments.
-          prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+          # Install Anthropic's official code-review skill from the plugin
+          # marketplace and run it against this PR (see GitHub Actions docs,
+          # "Using skills"). --comment posts findings as inline PR comments.
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment"
 
-            Review this pull request. The PR branch is already checked out in
-            the current working directory. This repo is a Claude Code
-            configuration project (skills, subagents, commands, conventions, and
-            the Python persistence/orchestration substrate). Read `conventions/`
-            for the project's own doc and code-quality standards and apply them.
-
-            Focus on:
-            1. **Correctness** — bugs, broken edge cases, wrong assumptions in
-               skill workflows and the Python substrate (`skills/scripts`).
-            2. **Conventions** — conformance to the rules in `conventions/`
-               (doc structure, CLAUDE.md indexes, naming, altitude).
-            3. **Consistency** — docs/indexes (`CLAUDE.md`, READMEs) kept in
-               sync with file moves/adds; settings.json/hooks coherent.
-            4. **Tests** — adequate coverage for substrate changes under
-               `tests/`; missing or weak cases.
-
-            Use inline comments for specific issues and a top-level comment for
-            the overall summary. Be concise; skip praise unless it's load-bearing.
-
+          # --debug: temporary, surfaces the exact API/auth error in the run log.
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --debug
