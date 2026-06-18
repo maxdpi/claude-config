@@ -242,6 +242,17 @@ code_change structure:
 CONSTRAINTS:
 - Every code_intent must have a corresponding code_change
 - Diffs must be in unified diff format (--- a/... +++ b/... @@ ... @@)
+- ANCHOR EACH HUNK ON STABLE CONTEXT, NOT ABSOLUTE LINE NUMBERS. Include enough
+  surrounding context lines (function signatures, dict/YAML keys, section headers,
+  the line you insert before/after) that the hunk applies by context match alone.
+  The @@ offsets are best-effort hints — correctness comes from the context lines,
+  because line numbers shift as other milestones edit the same file.
+- WAVE ORDER: milestones apply in wave order (W-001 fully before W-002, etc.). If
+  this code_change targets a file an EARLIER milestone also modifies, write the diff
+  against that file's POST-earlier-milestone state, anchor on context the earlier
+  milestone introduces, and name the dependency in 'comments'
+  (e.g. "depends on M-002 adding the 'milestones:' row"). Never anchor on a line that
+  only exists in the current tree but is removed/moved by an earlier milestone.
 - Comments explain WHY, not WHAT
 - New files use --- /dev/null as the source
 
@@ -261,11 +272,17 @@ ${planWithCode}
 VERIFICATION ITEMS:
 
 [ ] 1. Every code_intent has a code_change with matching intent_ref
-[ ] 2. All diffs are in valid unified diff format
+[ ] 2. All diffs are unified-diff-shaped (---/+++ headers, @@ hunks) AND each hunk
+       carries enough surrounding context lines to apply by context match.
+       Do NOT FAIL a hunk solely for line-number offsets — offsets are best-effort
+       and shift as other milestones edit the file; judge by context, not arithmetic.
 [ ] 3. New files use --- /dev/null as source
 [ ] 4. Comments explain WHY (not WHAT the diff does)
 [ ] 5. No diff introduces security violations (eval, shell=True, SQL concat)
 [ ] 6. Code_change ids follow CC-M-XXX-YYY format
+[ ] 7. Any diff targeting a file an earlier milestone also modifies anchors on
+       post-earlier-milestone context and names that dependency in 'comments'
+       (no anchoring on lines an earlier milestone removes or moves)
 
 VERDICT: PASS or FAIL
 If FAIL: list specific issues.`;
@@ -412,12 +429,18 @@ function isQrPass(qrResult) {
 
   let designApproved = isQrPass(designQrResult);
 
+  // Declared in the outer scope so the fix-pass output survives past the
+  // if-block. A block-scoped `const` here is invisible at the approvedDesign
+  // line below — `typeof designFixed` resolves to "undefined" and the fix is
+  // silently discarded (the original DL-026 defect this propagation aims to undo).
+  let designFixed = null;
+
   // QR retry loop: if QR fails, re-dispatch architect to fix, then re-verify
   if (!designApproved) {
     log("PLANNER: plan-design-qr FAIL — re-dispatching architect for fixes");
     log("DURABLE_EVENT: subagent_spawned architect plan-design-work-fix");
 
-    const designFixed = await agent(
+    designFixed = await agent(
       `PLANNER — plan-design-work (fix mode)
 
 QR FINDINGS:
@@ -438,15 +461,17 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
       agentType: "quality-reviewer",
     });
 
-    // Use the fixed design going forward regardless of retry QR outcome
-    // (avoids infinite loops; the plan proceeds with best-effort fixes)
+    // Proceed with the fixed design regardless of the retry verdict (avoids
+    // infinite loops; best-effort fixes), but surface the retry outcome so the
+    // re-verify agent's work is not silently wasted.
+    log(`PLANNER: plan-design-qr-retry verdict — ${isQrPass(designQrResult) ? "PASS" : "FAIL (proceeding best-effort)"}`);
   }
 
   log("DURABLE_EVENT: subagent_completed quality-reviewer plan-design-qr");
   log("DURABLE_EVENT: phase_completed plan-design-qr");
 
   // Propagate the fixed design if QR triggered a fix pass.
-  const approvedDesign = (typeof designFixed !== "undefined" && designFixed) ? designFixed : designResult;
+  const approvedDesign = designFixed || designResult;
 
   // ── Phase 5: plan-code-work ───────────────────────────────────────────────
   phase("plan-code-work");
@@ -477,11 +502,14 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
 
   const codeApproved = isQrPass(codeQrResult);
 
+  // Outer-scope declaration so the fix pass propagates (see designFixed above).
+  let codeFixed = null;
+
   if (!codeApproved) {
     log("PLANNER: plan-code-qr FAIL — re-dispatching developer for fixes");
     log("DURABLE_EVENT: subagent_spawned developer plan-code-work-fix");
 
-    const codeFixed = await agent(
+    codeFixed = await agent(
       `PLANNER — plan-code-work (fix mode)
 
 QR FINDINGS:
@@ -501,13 +529,15 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
       phase: "plan-code-qr",
       agentType: "quality-reviewer",
     });
+
+    log(`PLANNER: plan-code-qr-retry verdict — ${isQrPass(codeQrResult) ? "PASS" : "FAIL (proceeding best-effort)"}`);
   }
 
   log("DURABLE_EVENT: subagent_completed quality-reviewer plan-code-qr");
   log("DURABLE_EVENT: phase_completed plan-code-qr");
 
   // Propagate the fixed code if QR triggered a fix pass.
-  const approvedCode = (typeof codeFixed !== "undefined" && codeFixed) ? codeFixed : codeResult;
+  const approvedCode = codeFixed || codeResult;
 
   // ── Phase 7: plan-docs-work ───────────────────────────────────────────────
   phase("plan-docs-work");
@@ -538,11 +568,15 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
 
   const docsApproved = isQrPass(docsQrResult);
 
+  // Outer-scope declaration so the fix pass feeds the final artifact extraction
+  // below (see designFixed above).
+  let docsFixed = null;
+
   if (!docsApproved) {
     log("PLANNER: plan-docs-qr FAIL — re-dispatching technical-writer for fixes");
     log("DURABLE_EVENT: subagent_spawned technical-writer plan-docs-work-fix");
 
-    const docsFixed = await agent(
+    docsFixed = await agent(
       `PLANNER — plan-docs-work (fix mode)
 
 QR FINDINGS:
@@ -562,6 +596,8 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
       phase: "plan-docs-qr",
       agentType: "quality-reviewer",
     });
+
+    log(`PLANNER: plan-docs-qr-retry verdict — ${isQrPass(docsQrResult) ? "PASS" : "FAIL (proceeding best-effort)"}`);
   }
 
   log("DURABLE_EVENT: subagent_completed quality-reviewer plan-docs-qr");
@@ -569,11 +605,14 @@ Fix all issues identified by QR. Output the corrected plan JSON.`,
 
   log("PLANNER: All phases complete — PLAN APPROVED");
 
+  // Propagate the fixed docs if QR triggered a fix pass.
+  const approvedDocs = docsFixed || docsResult;
+
   // ── Build the real `plan` artifact ────────────────────────────────────────
   // Extract the final plan JSON from the docs phase output (which contains
   // the most complete version: design + code_changes + doc_diffs).
   // Falls back to extracting from earlier phases if parsing fails.
-  let planObj = extractJson(docsResult);
+  let planObj = extractJson(approvedDocs);
 
   // Ensure the artifact has the canonical required shape
   if (!planObj.overview && !planObj._raw) {

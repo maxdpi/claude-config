@@ -111,7 +111,10 @@ Plan
     code_changes: CodeChange[]  -- populated by Developer, amended by TW
       intent_ref: "CI-XXX" | null  -- null for cross-cutting docs (README.md)
       file: string
-      diff: string                 -- unified diff, includes all documentation
+      diff: string                 -- unified diff (context-anchored: hunks apply by
+                                   --   surrounding context, not absolute line numbers,
+                                   --   so they survive earlier milestones in wave order),
+                                   --   includes all documentation
       comments: string             -- change-level context, may reference decisions
 
     is_documentation_only: bool
@@ -123,6 +126,8 @@ Plan
 ```
 
 Waves execute in array order. All milestones in W-001 complete before W-002 begins. Milestones within a wave may execute in parallel.
+
+Because milestones apply sequentially, a `code_change.diff` whose file is also modified by an earlier milestone must be written against that file's post-earlier-milestone state and anchored on context the earlier milestone introduces — never on a line the earlier milestone removes or moves. Hunk line-number offsets are non-authoritative; the surrounding context lines are what make a diff apply. The dependency is named in the change's `comments`.
 
 Cross-reference validation: `Plan.validate_refs()` checks:
 
