@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Understands architecture, project conventions, and quality designs
-model: claude-opus-4-8
+model: opus
 effort: high
 color: purple
 permissionMode: plan

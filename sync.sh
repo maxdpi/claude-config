@@ -13,4 +13,8 @@ for dir in "$SRC"/*/; do
   rsync -a --delete "$dir" "$DEST/$name/"
 done
 
+# Install settings.json (the central model provisioning + harness config lives here).
+echo "Syncing settings.json -> $DEST/settings.json"
+rsync -a "$SRC/settings.json" "$DEST/settings.json"
+
 echo "Done."

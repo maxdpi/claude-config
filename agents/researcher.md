@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: Read-only analyst for adversarial critique, divergent reasoning, and evidence-based investigation
-model: claude-sonnet-4-6
+model: sonnet
 color: yellow
 disallowedTools: Agent
 tools: Read, Grep, Glob, Bash

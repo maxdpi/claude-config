@@ -1,7 +1,7 @@
 ---
 name: scout
 description: Cheap read-only investigator for narrow codebase questions — casts wide, verifies, reports signal-dense findings
-model: claude-haiku-4-5-20251001
+model: haiku
 color: cyan
 disallowedTools: Agent
 tools: Read, Grep, Glob, Bash
@@ -14,9 +14,12 @@ tools: Read, Grep, Glob, Bash
 > `Agent` (reinforced by `disallowedTools: Agent`) so it cannot spawn nested
 > scouts (leaf-agent rule, settings.json spawn-restriction note).
 >
-> `model: claude-haiku-4-5-20251001` keeps the scout cheap. Investigation fans out
+> `model: haiku` keeps the scout cheap. Investigation fans out
 > across many parallel scouts; a fast, low-cost tier is correct because the scout
-> reads and locates code rather than reasoning deeply about it. Skills that need a
+> reads and locates code rather than reasoning deeply about it. The `haiku` alias
+> resolves to whatever `ANTHROPIC_DEFAULT_HAIKU_MODEL` pins in `settings.json`
+> (default `claude-haiku-4-5-20251001`) — swap that one var to move every haiku-tier
+> agent at once. Skills that need a
 > read-only investigator (`codebase-analysis`, `refactor`, `incoherence`) spawn the
 > scout via `agentType: "scout"`; this file is the registered home for that type.
 
